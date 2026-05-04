@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+{% block title %}
+    {% if current_path == '/' %}Файлы — Диск{% else %}{{ current_path.strip('/').split('/')[-1] }} — Диск{% endif %}
+{% endblock %}
+
+{% block extra_styles %}
+.yd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; }
+
+/* Folder card */
+.yd-folder-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px 8px 12px; border-radius: 10px;
+    cursor: pointer; text-decoration: none; color: var(--yd-text);
+    transition: background .15s; position: relative; user-select: none;
+}
+.yd-folder-card:hover { background: var(--yd-hover); color: var(--yd-text); }
+.yd-folder-card.selected { background: rgba(255,219,77,.25); outline: 2px solid var(--yd-yellow-dark); }
+
+/* CSS folder icon */
+.yd-folder-icon { position: relative; width: 72px; height: 58px; margin-bottom: 8px; flex-shrink: 0; }
+.yd-folder-icon::before { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(160deg, #FFD740 60%, #FFCA28 100%); border-radius: 4px 10px 10px 10px; box-shadow: 0 2px 6px rgba(255,180,0,.25); }
+.yd-folder-icon::after { content: ''; position: absolute; top: 0; left: 0; width: 38px; height: 12px; background: #FFD740; border-radius: 6px 6px 0 0; }
+
+.yd-folder-name { font-size: 13px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+
+/* File card */
+.yd-file-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 8px 10px; border-radius: 10px;
+    cursor: pointer; transition: background .15s; position: relative; user-select: none;
+}
+.yd-file-card:hover { background: var(--yd-hover); }
+.yd-file-card.selected { background: rgba(255,219,77,.25); outline: 2px solid var(--yd-yellow-dark); }
+.yd-file-thumb { width: 68px; height: 80px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; overflow: hidden; flex-shrink: 0; }
+.yd-file-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.yd-file-thumb .file-icon-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+.yd-file-name { font-size: 12px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yd-text); }
+
+.fi-pdf   { background:#FFEBEE; } .fi-pdf   i { color:#E53935; font-size:30px; }
+.fi-img   { background:#F3E5F5; } .fi-img   i { color:#8E24AA; font-size:30px; }
+.fi-video { background:#FFF3E0; } .fi-video i { color:#F57C00; font-size:30px; }
+.fi-audio { background:#E8F5E9; } .fi-audio i { color:#388E3C; font-size:30px; }
+.fi-code  { background:#E3F2FD; } .fi-code  i { color:#1976D2; font-size:30px; }
+.fi-zip   { background:#F9FBE7; } .fi-zip   i { color:#827717; font-size:30px; }
+.fi-word  { background:#E8EAF6; } .fi-word  i { color:#3949AB; font-size:30px; }
+.fi-excel { background:#E8F5E9; } .fi-excel i { color:#2E7D32; font-size:30px; }
+.fi-def   { background:#FAFAFA; } .fi-def   i { color:#9E9E9E; font-size:30px; }
+
+/* Empty state */
+.yd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; color: var(--yd-muted); text-align: center; }
+.yd-empty i { font-size: 72px; color: #e0e0e0; }
+.yd-empty h3 { font-size: 18px; font-weight: 600; color: #bbb; margin: 0; }
+.yd-empty p { font-size: 14px; margin: 0; max-width: 260px; }
+
+/* Preview modal */
+.yd-preview .modal-dialog { max-width: 900px; }
+.yd-preview .modal-content { border-radius: 14px; overflow: hidden; border: none; box-shadow: 0 12px 48px rgba(0,0,0,.25); }
+.yd-preview .modal-header { background: #1c1b20; border: none; padding: 14px 20px; }
+.yd-preview .modal-title { color: #fff; font-size: 14px; }
+.yd-preview .btn-close { filter: invert(1) brightness(2); opacity: .6; }
+.yd-preview .btn-close:hover { opacity: 1; }
+.yd-preview .modal-body { background: #1c1b20; min-height: 240px; display: flex; align-items: center; justify-content: center; padding: 0; overflow: hidden; }
+.yd-preview .modal-footer { background: #1c1b20; border: none; padding: 12px 20px; gap: 8px; }
+#pv-img { max-width: 100%; max-height: 75vh; object-fit: contain; }
+#pv-video { max-width: 100%; max-height: 75vh; }
+#pv-iframe { width: 100%; height: 75vh; border: none; background: #fff; }
+#pv-text { background: #1e1e2e; color: #cdd6f4; font-family: monospace; font-size: 13px; line-height: 1.6; padding: 24px; margin: 0; width: 100%; max-height: 75vh; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+#pv-audio-wrap { padding: 48px 32px; text-align: center; width: 100%; }
+#pv-audio-wrap i { font-size: 64px; color: #444; display: block; margin-bottom: 16px; }
+#pv-audio-wrap p { color: #888; margin-bottom: 16px; font-size: 14px; }
+#pv-audio-wrap audio { width: 100%; }
+#pv-none { color: #666; text-align: center; padding: 48px; }
+#pv-none i { font-size: 56px; color: #333; display: block; margin-bottom: 12px; }
+.pv-action-btn { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; text-decoration: none; }
+.pv-action-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+
+/* Delete form inline */
+.del-form { display: inline; }
+#searchBar { display: none; }
+
+/* Drag-over highlight on folders */
+.yd-folder-card.drag-over {
+    background: rgba(255,219,77,.35) !important;
+    outline: 2px dashed var(--yd-yellow-dark) !important;
+    transform: scale(1.04);
+    transition: transform .1s;
+}
+{% endblock %}
+
+{% block main %}
+<!-- Search bar -->
+<div class="yd-search-bar" id="searchBar">
+    <form action="{{ url_for('files.search') }}" method="GET" style="display:flex;flex:1;gap:8px;">
+        <input type="text" name="q" class="yd-search-input" placeholder="Поиск файлов и папок..." autofocus>
+        <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;flex-shrink:0;">Найти</button>
+    </form>
+    <button onclick="toggleSearch(event)" style="background:none;border:none;color:var(--yd-muted);cursor:pointer;font-size:18px;padding:4px 8px;">
+        <i class="bi bi-x-lg"></i>
+    </button>
+</div>
+
+<!-- Header — normal or selection bar -->
+<div class="yd-main-head" id="mainHead">
+    <!-- Normal state -->
+    <div id="headNormal" style="display:flex;align-items:center;gap:12px;flex:1;">
+        <span class="yd-main-title">
+            {% if current_path == '/' %}Файлы{% else %}{{ current_path.strip('/').split('/')[-1] }}{% endif %}
+        </span>
+        <button class="yd-sort-btn">
+            <i class="bi bi-sort-alpha-down"></i> По названию
+        </button>
+        <div class="yd-view-toggle">
+            <button class="yd-view-btn active" title="Сетка"><i class="bi bi-grid-3x3-gap"></i></button>
+            <button class="yd-view-btn" title="Список"><i class="bi bi-list-ul"></i></button>
+        </div>
+    </div>
+    <!-- Selection state (hidden until item clicked) -->
+    <div id="headSelected" style="display:none;flex:1;align-items:center;gap:4px;">
+        <div class="sel-info">
+            <i class="sel-icon bi bi-info-circle"></i>
+            <span class="sel-name" id="selName"></span>
+        </div>
+        <div class="sel-actions" id="selActions">
+            <!-- Dynamic action buttons injected by JS -->
+        </div>
+        <button class="sel-close" id="selCloseBtn" title="Закрыть" onclick="clearSelection()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Breadcrumb -->
+{% if current_path != '/' %}
+<div class="yd-breadcrumb">
+    <a href="{{ url_for('files.list_files', path='/') }}">Файлы</a>
+    {% set parts = current_path.strip('/').split('/') %}
+    {% set cumulative = namespace(val='/') %}
+    {% for part in parts %}
+        {% set cumulative.val = cumulative.val + part + '/' %}
+        <span style="margin:0 3px;color:#ccc;font-size:11px;"><i class="bi bi-chevron-right"></i></span>
+        {% if loop.last %}
+            <span class="active">{{ part }}</span>
+        {% else %}
+            <a href="{{ url_for('files.list_files', path=cumulative.val) }}">{{ part }}</a>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Content -->
+<div class="yd-content" id="mainContent" onclick="handleBgClick(event)">
+    {% set folders = items | selectattr('is_directory') | list %}
+    {% set files   = items | rejectattr('is_directory') | list %}
+
+    {% if parent_path %}
+    <div style="margin-bottom:10px;">
+        <a href="{{ url_for('files.list_files', path=parent_path) }}"
+           style="display:inline-flex;align-items:center;gap:6px;color:#999;font-size:13px;text-decoration:none;padding:4px 8px;border-radius:6px;transition:background .15s;"
+           onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+            <i class="bi bi-arrow-left"></i> Назад
+        </a>
+    </div>
+    {% endif %}
+
+    {% if folders %}
+    <div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;letter-spacing:.3px;">ПАПКИ</div>
+    <div class="yd-grid" style="margin-bottom:16px;">
+        {% for item in folders %}
+        <div class="yd-folder-card" id="item-{{ item.id }}"
+             data-id="{{ item.id }}"
+             data-name="{{ item.name }}"
+             data-type="folder"
+             data-parent-path="{{ current_path }}"
+             data-href="{{ url_for('files.list_files', path=current_path + item.name + '/') }}"
+             data-delete-url="{{ url_for('files.delete_item', path=current_path + item.name + '/') }}"
+             data-dest-path="{{ current_path + item.name + '/' }}"
+             draggable="true"
+             onclick="handleItemClick(event, this)"
+             ondblclick="handleItemDblClick(this)"
+             ondragstart="onDragStart(event, this)"
+             ondragover="onFolderDragOver(event, this)"
+             ondragleave="onFolderDragLeave(this)"
+             ondrop="onFolderDrop(event, this)">
+            <div class="yd-folder-icon"></div>
+            <span class="yd-folder-name">{{ item.name }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if files %}
+    {% if folders %}<div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;letter-spacing:.3px;">ФАЙЛЫ</div>{% endif %}
+    <div class="yd-grid">
+        {% for item in files %}
+        {% set ext = item.name.rsplit('.', 1)[-1].lower() if '.' in item.name else '' %}
+        {% set is_img   = ext in ['jpg','jpeg','png','gif','webp','svg','bmp'] %}
+        {% set is_pdf   = ext == 'pdf' %}
+        {% set is_video = ext in ['mp4','webm','ogg','mov','avi'] %}
+        {% set is_audio = ext in ['mp3','wav','ogg','flac','aac','m4a'] %}
+        {% set is_code  = ext in ['py','js','ts','html','css','json','xml','yaml','yml','sh','md','txt','ini','toml','rs','go','java','c','cpp','h','log'] %}
+        {% set is_zip   = ext in ['zip','rar','7z','tar','gz','bz2'] %}
+        {% set is_word  = ext in ['doc','docx'] %}
+        {% set is_excel = ext in ['xls','xlsx','csv'] %}
+        {% set can_preview = is_img or is_pdf or is_video or is_audio or is_code %}
+        {% set file_path = current_path + item.name %}
+
+        {% if is_pdf %}{% set fi_cls='fi-pdf'%}{% set fi_icon='bi-file-pdf'%}
+        {% elif is_img %}{% set fi_cls='fi-img'%}{% set fi_icon='bi-file-image'%}
+        {% elif is_video %}{% set fi_cls='fi-video'%}{% set fi_icon='bi-file-play'%}
+        {% elif is_audio %}{% set fi_cls='fi-audio'%}{% set fi_icon='bi-file-music'%}
+        {% elif is_code %}{% set fi_cls='fi-code'%}{% set fi_icon='bi-file-code'%}
+        {% elif is_zip %}{% set fi_cls='fi-zip'%}{% set fi_icon='bi-file-zip'%}
+        {% elif is_word %}{% set fi_cls='fi-word'%}{% set fi_icon='bi-file-word'%}
+        {% elif is_excel %}{% set fi_cls='fi-excel'%}{% set fi_icon='bi-file-earmark-spreadsheet'%}
+        {% else %}{% set fi_cls='fi-def'%}{% set fi_icon='bi-file-earmark'%}
+        {% endif %}
+
+        <div class="yd-file-card" id="item-{{ item.id }}"
+             data-id="{{ item.id }}"
+             data-name="{{ item.name }}"
+             data-type="file"
+             data-parent-path="{{ current_path }}"
+             data-preview-url="{{ url_for('files.preview_file', path=file_path) }}"
+             data-download-url="{{ url_for('files.download_file', path=file_path) }}"
+             data-share-url="{{ url_for('files.share_file', path=file_path) }}"
+             data-delete-url="{{ url_for('files.delete_item', path=file_path) }}"
+             data-can-preview="{{ 'true' if can_preview else 'false' }}"
+             data-ptype="{% if is_img %}img{% elif is_pdf %}pdf{% elif is_video %}video{% elif is_audio %}audio{% elif is_code %}text{% endif %}"
+             draggable="true"
+             onclick="handleItemClick(event, this)"
+             ondblclick="handleItemDblClick(this)"
+             ondragstart="onDragStart(event, this)">
+            <div class="yd-file-thumb">
+                {% if is_img %}
+                <img src="{{ url_for('files.preview_file', path=file_path) }}" alt="{{ item.name }}" loading="lazy"
+                     onerror="this.parentElement.innerHTML='<div class=\'file-icon-wrap fi-img\'><i class=\'bi bi-file-image\'></i></div>'">
+                {% else %}
+                <div class="file-icon-wrap {{ fi_cls }}"><i class="bi {{ fi_icon }}"></i></div>
+                {% endif %}
+            </div>
+            <span class="yd-file-name">{{ item.name }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not folders and not files %}
+    <div class="yd-empty">
+        <i class="bi bi-folder2-open"></i>
+        <h3>Папка пуста</h3>
+        <p>Перетащите файлы сюда или нажмите «Загрузить»</p>
+        <button class="yd-btn-upload" id="emptyUploadBtn" style="width:auto;margin-top:4px;">
+            <i class="bi bi-cloud-upload"></i> Загрузить файл
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Hidden delete forms (for selection bar) -->
+<div id="hiddenForms" style="display:none;"></div>
+
+<!-- Preview Modal -->
+<div class="modal fade yd-preview" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-eye me-1"></i><span id="pv-title-text"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="pv-body"></div>
+      <div class="modal-footer">
+        <a id="pv-download" href="#" class="pv-action-btn"><i class="bi bi-download"></i> Скачать</a>
+        <button type="button" class="pv-action-btn" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Selection state ───────────────────────────────────────────────────────────
+const CURRENT_PATH = '{{ current_path }}';
+let selectedItems = [];
+const mainHead    = document.getElementById('mainHead');
+const headNormal  = document.getElementById('headNormal');
+const headSelected= document.getElementById('headSelected');
+const selName     = document.getElementById('selName');
+const selActions  = document.getElementById('selActions');
+
+function clearSelection() {
+    selectedItems.forEach(el => el.classList.remove('selected'));
+    selectedItems = [];
+    mainHead.classList.remove('selected');
+    headNormal.style.display  = 'flex';
+    headSelected.style.display = 'none';
+}
+
+function updateSelectionBar() {
+    if (!selectedItems.length) { clearSelection(); return; }
+    mainHead.classList.add('selected');
+    headNormal.style.display   = 'none';
+    headSelected.style.display = 'flex';
+    selName.textContent = selectedItems.length === 1
+        ? selectedItems[0].dataset.name
+        : `${selectedItems.length} элемент${selectedItems.length<5?'а':'ов'} выбрано`;
+    buildSelectionActions();
+}
+
+function buildSelectionActions() {
+    let html = '';
+    if (selectedItems.length === 1) {
+        const el    = selectedItems[0];
+        const type  = el.dataset.type;
+        const id    = el.dataset.id;
+        const sn    = el.dataset.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        const par   = el.dataset.parentPath || CURRENT_PATH;
+        if (type==='file')
+            html += `<a href="${el.dataset.downloadUrl}" class="sel-btn"><i class="bi bi-download"></i> Скачать</a><div class="sel-sep"></div>`;
+        html += `
+        <div class="dropdown">
+          <button class="sel-btn dropdown-toggle" data-bs-toggle="dropdown" style="gap:4px;"><i class="bi bi-three-dots"></i></button>
+          <ul class="dropdown-menu sel-more-menu">
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();openRename('${id}','${sn}')"><i class="bi bi-pencil"></i> Переименовать</a></li>
+            ${type==='file'?`<li><a class="dropdown-item" href="#" onclick="event.preventDefault();copyItem('${id}')"><i class="bi bi-files"></i> Копировать</a></li>`:''}
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();openMove('${id}','${sn}','${par}')"><i class="bi bi-folder-symlink"></i> Переместить в…</a></li>
+          </ul>
+        </div>
+        <div class="sel-sep"></div>
+        <button class="sel-btn danger" onclick="confirmDeleteSelected()"><i class="bi bi-trash3"></i> В корзину</button>`;
+    } else {
+        html = `
+        <button class="sel-btn" onclick="openMoveSelected()"><i class="bi bi-folder-symlink"></i> Переместить</button>
+        <div class="sel-sep"></div>
+        <button class="sel-btn danger" onclick="confirmDeleteSelected()"><i class="bi bi-trash3"></i> В корзину (${selectedItems.length})</button>`;
+    }
+    selActions.innerHTML = html;
+}
+
+function handleBgClick(e) {
+    if (!e.target.closest('.yd-folder-card') && !e.target.closest('.yd-file-card') &&
+        !e.target.closest('.yd-breadcrumb') && e.target.tagName !== 'A')
+        clearSelection();
+}
+
+function handleItemClick(e, el) {
+    e.stopPropagation();
+    if (e.shiftKey) {
+        const idx = selectedItems.indexOf(el);
+        if (idx >= 0) { el.classList.remove('selected'); selectedItems.splice(idx, 1); }
+        else          { el.classList.add('selected');    selectedItems.push(el); }
+        if (!selectedItems.length) { clearSelection(); return; }
+        updateSelectionBar(); return;
+    }
+    selectedItems.forEach(i => i.classList.remove('selected'));
+    selectedItems = [el]; el.classList.add('selected');
+    updateSelectionBar();
+}
+
+function handleItemDblClick(el) {
+    if (el.dataset.type === 'folder') {
+        window.location.href = el.dataset.href;
+    } else {
+        el.dataset.canPreview === 'true' ? openPreview(el) : (window.location.href = el.dataset.downloadUrl);
+    }
+}
+
+// ── Delete helpers ────────────────────────────────────────────────────────────
+function confirmDeleteSelected() {
+    if (!selectedItems.length) return;
+    if (selectedItems.length === 1) {
+        const el = selectedItems[0];
+        confirmDelete(el.dataset.deleteUrl, el.dataset.name, el.dataset.type, CURRENT_PATH);
+    } else {
+        confirmDeleteBatch(selectedItems.map(el => el.dataset.id), CURRENT_PATH);
+    }
+}
+
+// ── Move multi-select ─────────────────────────────────────────────────────────
+function openMoveSelected() {
+    if (selectedItems.length === 1) {
+        const el = selectedItems[0];
+        openMove(el.dataset.id, el.dataset.name, el.dataset.parentPath || CURRENT_PATH);
+    } else {
+        _moveSelectedPath = null;
+        _moveBatchIds = selectedItems.map(el => el.dataset.id);
+        _moveSkipPath = null;
+        const t = document.getElementById('moveModalTitle');
+        if (t) t.innerHTML = '<i class="bi bi-folder-symlink me-2"></i>Переместить в…';
+        const btn = document.getElementById('moveConfirmBtn');
+        if (btn) btn.disabled = false;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('moveModal')).show();
+        _loadMoveFoldersPicker('/');
+    }
+}
+
+// ── Del key ───────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.key === 'Delete' && selectedItems.length &&
+        !e.target.matches('input,textarea,[contenteditable]')) {
+        e.preventDefault(); confirmDeleteSelected();
+    }
+    if (e.key === 'Escape') clearSelection();
+});
+
+// ── Preview ───────────────────────────────────────────────────────────────────
+function openPreview(el) {
+    const name=el.dataset.name, type=el.dataset.ptype, url=el.dataset.previewUrl;
+    document.getElementById('pv-title-text').textContent = name;
+    document.getElementById('pv-download').href = el.dataset.downloadUrl || url;
+    const body = document.getElementById('pv-body');
+    body.innerHTML = '<div style="padding:48px;color:#888;"><div class="spinner-border text-light"></div></div>';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('previewModal')).show();
+    if (type==='img') {
+        const img=document.createElement('img'); img.id='pv-img'; img.src=url;
+        img.onload  = () => { body.innerHTML=''; body.appendChild(img); };
+        img.onerror = () => { body.innerHTML='<div id="pv-none"><i class="bi bi-eye-slash"></i><p>Не удалось загрузить</p></div>'; };
+    } else if (type==='pdf')   { body.innerHTML=`<iframe id="pv-iframe" src="${url}"></iframe>`; }
+      else if (type==='video') { body.innerHTML=`<video id="pv-video" controls autoplay src="${url}"></video>`; }
+      else if (type==='audio') { body.innerHTML=`<div id="pv-audio-wrap"><i class="bi bi-music-note-beamed"></i><p>${name}</p><audio controls><source src="${url}"></audio></div>`; }
+      else if (type==='text')  { fetch(url).then(r=>r.text()).then(t=>{ const pre=document.createElement('pre'); pre.id='pv-text'; pre.textContent=t.length>60000?t.slice(0,60000)+'\n\n[обрезано]':t; body.innerHTML=''; body.appendChild(pre); }); }
+}
+document.getElementById('previewModal').addEventListener('hidden.bs.modal', () => {
+    const body=document.getElementById('pv-body'), v=body.querySelector('video,audio');
+    if (v) { v.pause(); v.src=''; } body.innerHTML='';
+});
+
+// ── Empty state upload ────────────────────────────────────────────────────────
+const emptyBtn = document.getElementById('emptyUploadBtn');
+if (emptyBtn) emptyBtn.addEventListener('click', () => document.getElementById('globalFileInput').click());
+
+// ── Drag & Drop (single + multi) ─────────────────────────────────────────────
+let _dragIds    = [];
+let _dragParent = null;
+
+function onDragStart(e, el) {
+    if (e.dataTransfer.types.includes('Files')) return;
+    if (selectedItems.includes(el) && selectedItems.length > 1) {
+        _dragIds    = selectedItems.map(i => i.dataset.id);
+        _dragParent = null;
+        // ghost label
+        const ghost = document.createElement('div');
+        ghost.style.cssText = 'position:fixed;top:-999px;background:#1c1b20;color:#fff;padding:6px 12px;border-radius:8px;font-size:13px;';
+        ghost.textContent = `${selectedItems.length} элемента`;
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 40, 20);
+        setTimeout(() => ghost.remove(), 0);
+    } else {
+        _dragIds    = [el.dataset.id];
+        _dragParent = el.dataset.parentPath;
+    }
+    e.dataTransfer.setData('text/plain', JSON.stringify(_dragIds));
+    e.dataTransfer.effectAllowed = 'move';
+    selectedItems.forEach(i => { i.style.opacity='0.45'; });
+    el.style.opacity = '0.45';
+    setTimeout(() => { selectedItems.forEach(i => i.style.opacity=''); el.style.opacity=''; }, 0);
+}
+
+function onFolderDragOver(e, folderEl) {
+    e.preventDefault(); e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) return;
+    e.dataTransfer.dropEffect = 'move';
+    folderEl.classList.add('drag-over');
+}
+function onFolderDragLeave(folderEl) { folderEl.classList.remove('drag-over'); }
+
+function onFolderDrop(e, folderEl) {
+    e.preventDefault(); e.stopPropagation();
+    folderEl.classList.remove('drag-over');
+    if (e.dataTransfer.types.includes('Files')) return;
+    let ids = _dragIds;
+    try { const raw=e.dataTransfer.getData('text/plain'); if (raw) ids=JSON.parse(raw); } catch {}
+    if (!ids.length) return;
+    const destPath = folderEl.dataset.destPath;
+    if (!destPath) return;
+    if (ids.length===1 && _dragParent && destPath===_dragParent) return;
+    // Batch move
+    const dest=document.getElementById('moveBatchDest'), ret=document.getElementById('moveBatchReturn'), cont=document.getElementById('moveBatchIds');
+    if (dest) dest.value = destPath;
+    if (ret)  ret.value  = CURRENT_PATH;
+    if (cont) { cont.innerHTML=''; ids.forEach(id => { const i=document.createElement('input'); i.type='hidden'; i.name='ids[]'; i.value=id; cont.appendChild(i); }); }
+    document.getElementById('moveBatchForm').submit();
+}
+
+// ── Right-click context menu ──────────────────────────────────────────────────
+document.getElementById('mainContent').addEventListener('contextmenu', e => {
+    const fileCard   = e.target.closest('.yd-file-card');
+    const folderCard = e.target.closest('.yd-folder-card');
+    const el = fileCard || folderCard;
+
+    if (el) {
+        if (!selectedItems.includes(el)) {
+            selectedItems.forEach(i => i.classList.remove('selected'));
+            selectedItems = [el]; el.classList.add('selected');
+            updateSelectionBar();
+        }
+        const multi = selectedItems.length > 1;
+        const type  = el.dataset.type;
+        const id    = el.dataset.id;
+        const name  = el.dataset.name;
+        const par   = el.dataset.parentPath || CURRENT_PATH;
+        const menuItems = [];
+        if (!multi) {
+            menuItems.push({ icon:'<i class="bi bi-pencil"></i>', bg:'#EEF2FF', color:'#3949AB', label:'Переименовать', action:()=>openRename(id, name) });
+        }
+        menuItems.push({ icon:'<i class="bi bi-files"></i>', bg:'#E3F2FD', color:'#1976D2',
+            label: multi ? `Копировать (${selectedItems.length})` : 'Копировать',
+            action: () => {
+                if (multi) {
+                    showToast('Копирование нескольких файлов: выберите один за раз', 'info');
+                } else {
+                    openCopyTo(id, name, type);
+                }
+            }
+        });
+        menuItems.push({ icon:'<i class="bi bi-scissors"></i>', bg:'#FFF3E0', color:'#F57C00',
+            label: multi ? `Переместить (${selectedItems.length})` : 'Вырезать',
+            action: () => {
+                if (multi) {
+                    _moveSelectedPath = null;
+                    _moveBatchIds = selectedItems.map(i => i.dataset.id);
+                    _moveSkipPath = null;
+                    const t = document.getElementById('moveModalTitle');
+                    if (t) t.innerHTML = '<i class="bi bi-folder-symlink me-2"></i>Переместить в…';
+                    const btn = document.getElementById('moveConfirmBtn');
+                    if (btn) btn.disabled = false;
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('moveModal')).show();
+                    _loadMoveFoldersPicker('/');
+                } else {
+                    openMove(id, name, par);
+                }
+            }
+        });
+        menuItems.push('sep');
+        menuItems.push({ icon:'<i class="bi bi-folder-symlink"></i>', bg:'#F3E5F5', color:'#8E24AA',
+            label: multi ? `Переместить (${selectedItems.length})` : 'Переместить в…',
+            action: () => openMoveSelected()
+        });
+        menuItems.push('sep');
+        menuItems.push({ icon:'<i class="bi bi-trash3"></i>', bg:'#FFEBEE', color:'#E53935',
+            label: multi ? `Удалить (${selectedItems.length})` : (type==='folder' ? 'Удалить папку' : 'Удалить файл'),
+            danger:true, action:()=>confirmDeleteSelected() });
+        showCtxMenu(e, menuItems);
+    } else {
+        // Background menu
+        const bgItems = [
+            { icon:'<i class="bi bi-folder-plus"></i>', bg:'#FFF9DB', color:'#a07000', label:'Новая папка',
+              action:()=>bootstrap.Modal.getOrCreateInstance(document.getElementById('mkdirModal')).show() },
+            { icon:'<i class="bi bi-cloud-upload"></i>', bg:'#E3F2FD', color:'#1976D2', label:'Загрузить файлы',
+              action:()=>document.getElementById('globalFileInput').click() }
+        ];
+        showCtxMenu(e, bgItems);
+    }
+});
+</script>
+{% endblock %}

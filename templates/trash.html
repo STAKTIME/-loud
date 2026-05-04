@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Корзина — Диск{% endblock %}
+
+{% block extra_styles %}
+.trash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; }
+
+.trash-item {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 8px 10px; border-radius: 10px;
+    position: relative; opacity: 0.75;
+    transition: opacity .15s, background .15s;
+}
+.trash-item:hover { opacity: 1; background: var(--yd-hover); }
+.trash-item-icon { width: 68px; height: 68px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+
+/* folder icon */
+.yd-folder-icon { position: relative; width: 72px; height: 58px; flex-shrink: 0; }
+.yd-folder-icon::before { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(160deg, #FFD740 60%, #FFCA28 100%); border-radius: 4px 10px 10px 10px; filter: grayscale(40%); }
+.yd-folder-icon::after { content: ''; position: absolute; top: 0; left: 0; width: 38px; height: 12px; background: #FFD740; border-radius: 6px 6px 0 0; filter: grayscale(40%); }
+
+.trash-name { font-size: 12px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yd-text); margin-bottom: 4px; }
+.trash-date { font-size: 10px; color: var(--yd-muted); text-align: center; }
+.trash-actions { display: flex; gap: 4px; margin-top: 6px; }
+.trash-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: none; border: 1.5px solid var(--yd-border); border-radius: 6px;
+    padding: 3px 8px; font-size: 11px; color: var(--yd-text);
+    cursor: pointer; transition: background .15s;
+}
+.trash-btn:hover { background: var(--yd-hover); }
+.trash-btn.danger { border-color: #ffcdd2; color: #c62828; }
+.trash-btn.danger:hover { background: #ffebee; }
+.trash-btn.restore { border-color: #c8e6c9; color: #2e7d32; }
+.trash-btn.restore:hover { background: #e8f5e9; }
+
+.fi-pdf   { background:#FFEBEE; border-radius:6px; } .fi-pdf   i { color:#E53935; font-size:30px; }
+.fi-img   { background:#F3E5F5; border-radius:6px; } .fi-img   i { color:#8E24AA; font-size:30px; }
+.fi-video { background:#FFF3E0; border-radius:6px; } .fi-video i { color:#F57C00; font-size:30px; }
+.fi-audio { background:#E8F5E9; border-radius:6px; } .fi-audio i { color:#388E3C; font-size:30px; }
+.fi-code  { background:#E3F2FD; border-radius:6px; } .fi-code  i { color:#1976D2; font-size:30px; }
+.fi-zip   { background:#F9FBE7; border-radius:6px; } .fi-zip   i { color:#827717; font-size:30px; }
+.fi-def   { background:#FAFAFA; border-radius:6px; } .fi-def   i { color:#9E9E9E; font-size:30px; }
+
+.yd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; color: var(--yd-muted); text-align: center; }
+.yd-empty i { font-size: 72px; color: #e0e0e0; }
+.yd-empty h3 { font-size: 18px; font-weight: 600; color: #bbb; margin: 0; }
+.yd-empty p { font-size: 14px; margin: 0; }
+{% endblock %}
+
+{% block main %}
+<div class="yd-main-head">
+    <span class="yd-main-title">Корзина</span>
+    {% if items %}
+    <form method="POST" action="{{ url_for('files.empty_trash') }}"
+          onsubmit="return confirm('Очистить корзину? Файлы будут удалены навсегда.')">
+        <button type="submit" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid #ffcdd2;border-radius:8px;padding:5px 14px;font-size:13px;color:#c62828;cursor:pointer;">
+            <i class="bi bi-trash3"></i> Очистить корзину
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="yd-content">
+{% if not items %}
+<div class="yd-empty">
+    <i class="bi bi-trash3"></i>
+    <h3>Корзина пуста</h3>
+    <p>Удалённые файлы и папки появятся здесь</p>
+</div>
+{% else %}
+<div style="font-size:13px;color:var(--yd-muted);margin-bottom:16px;">
+    {{ items|length }} элементов в корзине
+</div>
+<div class="trash-grid">
+    {% for item in items %}
+    {% set ext = item.name.rsplit('.', 1)[-1].lower() if '.' in item.name else '' %}
+    {% if item.is_directory %}{% set fi_cls = '' %}
+    {% elif ext == 'pdf' %}{% set fi_cls = 'fi-pdf' %}{% set fi_icon = 'bi-file-pdf' %}
+    {% elif ext in ['jpg','jpeg','png','gif','webp','svg','bmp'] %}{% set fi_cls = 'fi-img' %}{% set fi_icon = 'bi-file-image' %}
+    {% elif ext in ['mp4','webm','ogg','mov','avi'] %}{% set fi_cls = 'fi-video' %}{% set fi_icon = 'bi-file-play' %}
+    {% elif ext in ['mp3','wav','flac','aac','m4a'] %}{% set fi_cls = 'fi-audio' %}{% set fi_icon = 'bi-file-music' %}
+    {% elif ext in ['py','js','ts','html','css','json','txt','md','xml'] %}{% set fi_cls = 'fi-code' %}{% set fi_icon = 'bi-file-code' %}
+    {% elif ext in ['zip','rar','7z','tar','gz'] %}{% set fi_cls = 'fi-zip' %}{% set fi_icon = 'bi-file-zip' %}
+    {% else %}{% set fi_cls = 'fi-def' %}{% set fi_icon = 'bi-file-earmark' %}
+    {% endif %}
+
+    <div class="trash-item">
+        {% if item.is_directory %}
+        <div class="yd-folder-icon" style="margin-bottom:8px;"></div>
+        {% else %}
+        <div class="trash-item-icon {{ fi_cls }}" style="width:68px;height:68px;">
+            <i class="bi {{ fi_icon }}"></i>
+        </div>
+        {% endif %}
+        <span class="trash-name" title="{{ item.name }}">{{ item.name }}</span>
+        {% if item.deleted_at %}
+        <span class="trash-date">{{ item.deleted_at.strftime('%d.%m.%Y') }}</span>
+        {% endif %}
+        <div class="trash-actions">
+            <form method="POST" action="{{ url_for('files.restore') }}" style="display:inline;">
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <button type="submit" class="trash-btn restore" title="Восстановить">
+                    <i class="bi bi-arrow-counterclockwise"></i> Вернуть
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('files.delete_permanent') }}" style="display:inline;"
+                  onsubmit="return confirm('Удалить «{{ item.name }}» навсегда?')">
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <button type="submit" class="trash-btn danger" title="Удалить навсегда">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+</div>
+{% endblock %}

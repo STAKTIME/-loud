@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Поиск: {{ q }} — Диск{% endblock %}
+
+{% block extra_styles %}
+.yd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; }
+.yd-folder-card { display: flex; flex-direction: column; align-items: center; padding: 16px 8px 12px; border-radius: 10px; cursor: pointer; text-decoration: none; color: var(--yd-text); transition: background .15s; }
+.yd-folder-card:hover { background: var(--yd-hover); color: var(--yd-text); }
+.yd-folder-icon { position: relative; width: 72px; height: 58px; margin-bottom: 8px; flex-shrink: 0; }
+.yd-folder-icon::before { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(160deg, #FFD740 60%, #FFCA28 100%); border-radius: 4px 10px 10px 10px; box-shadow: 0 2px 6px rgba(255,180,0,.25); }
+.yd-folder-icon::after { content: ''; position: absolute; top: 0; left: 0; width: 38px; height: 12px; background: #FFD740; border-radius: 6px 6px 0 0; }
+.yd-folder-name { font-size: 13px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.yd-file-card { display: flex; flex-direction: column; align-items: center; padding: 12px 8px 10px; border-radius: 10px; cursor: pointer; transition: background .15s; position: relative; }
+.yd-file-card:hover { background: var(--yd-hover); }
+.yd-file-thumb { width: 68px; height: 80px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; overflow: hidden; flex-shrink: 0; }
+.yd-file-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.yd-file-thumb .file-icon-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+.yd-file-name { font-size: 12px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.fi-pdf   { background:#FFEBEE; } .fi-pdf   i { color:#E53935; font-size:30px; }
+.fi-img   { background:#F3E5F5; } .fi-img   i { color:#8E24AA; font-size:30px; }
+.fi-video { background:#FFF3E0; } .fi-video i { color:#F57C00; font-size:30px; }
+.fi-audio { background:#E8F5E9; } .fi-audio i { color:#388E3C; font-size:30px; }
+.fi-code  { background:#E3F2FD; } .fi-code  i { color:#1976D2; font-size:30px; }
+.fi-zip   { background:#F9FBE7; } .fi-zip   i { color:#827717; font-size:30px; }
+.fi-def   { background:#FAFAFA; } .fi-def   i { color:#9E9E9E; font-size:30px; }
+
+.yd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; color: var(--yd-muted); text-align: center; }
+.yd-empty i { font-size: 72px; color: #e0e0e0; }
+.yd-empty h3 { font-size: 18px; font-weight: 600; color: #bbb; margin: 0; }
+
+.yd-preview .modal-dialog { max-width: 900px; }
+.yd-preview .modal-content { border-radius: 14px; overflow: hidden; border: none; }
+.yd-preview .modal-header { background: #1c1b20; border: none; padding: 14px 20px; }
+.yd-preview .modal-title { color: #fff; font-size: 14px; }
+.yd-preview .btn-close { filter: invert(1) brightness(2); opacity: .6; }
+.yd-preview .modal-body { background: #1c1b20; min-height: 240px; display: flex; align-items: center; justify-content: center; padding: 0; overflow: hidden; }
+.yd-preview .modal-footer { background: #1c1b20; border: none; padding: 12px 20px; gap: 8px; }
+#pv-img { max-width: 100%; max-height: 75vh; object-fit: contain; }
+#pv-video { max-width: 100%; max-height: 75vh; }
+#pv-iframe { width: 100%; height: 75vh; border: none; background: #fff; }
+#pv-text { background: #1e1e2e; color: #cdd6f4; font-family: monospace; font-size: 13px; line-height: 1.6; padding: 24px; margin: 0; width: 100%; max-height: 75vh; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+#pv-audio-wrap { padding: 48px 32px; text-align: center; width: 100%; }
+#pv-audio-wrap i { font-size: 64px; color: #444; display: block; margin-bottom: 16px; }
+#pv-audio-wrap audio { width: 100%; }
+.pv-action-btn { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; text-decoration: none; }
+.pv-action-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+{% endblock %}
+
+{% block main %}
+<div class="yd-search-bar" style="display:flex;">
+    <form action="{{ url_for('files.search') }}" method="GET" style="display:flex;flex:1;gap:8px;">
+        <input type="text" name="q" class="yd-search-input" placeholder="Поиск файлов и папок..." value="{{ q }}" autofocus>
+        <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;flex-shrink:0;">Найти</button>
+    </form>
+    <a href="{{ url_for('files.list_files') }}" style="background:none;border:none;color:var(--yd-muted);cursor:pointer;font-size:18px;padding:4px 12px;display:flex;align-items:center;text-decoration:none;">
+        <i class="bi bi-x-lg"></i>
+    </a>
+</div>
+
+<div class="yd-main-head">
+    <span class="yd-main-title">Результаты: «{{ q }}»</span>
+    <span style="font-size:13px;color:#999;">{{ (folders|length) + (files|length) }} объектов</span>
+</div>
+
+<div class="yd-content">
+{% if not folders and not files %}
+<div class="yd-empty">
+    <i class="bi bi-search"></i>
+    <h3>Ничего не найдено</h3>
+    <p>По запросу «{{ q }}» ничего не найдено</p>
+</div>
+{% else %}
+{% if folders %}
+<div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;">ПАПКИ</div>
+<div class="yd-grid" style="margin-bottom:16px;">
+    {% for item in folders %}
+    <a href="{{ url_for('files.list_files', path=item.parent_path + item.name + '/') }}"
+       class="yd-folder-card" title="{{ item.name }}">
+        <div class="yd-folder-icon"></div>
+        <span class="yd-folder-name">{{ item.name }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if files %}
+{% if folders %}<div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;">ФАЙЛЫ</div>{% endif %}
+<div class="yd-grid">
+    {% for item in files %}
+    {% set ext = item.name.rsplit('.', 1)[-1].lower() if '.' in item.name else '' %}
+    {% set is_img   = ext in ['jpg','jpeg','png','gif','webp','svg','bmp'] %}
+    {% set is_pdf   = ext == 'pdf' %}
+    {% set is_video = ext in ['mp4','webm','ogg','mov','avi'] %}
+    {% set is_audio = ext in ['mp3','wav','ogg','flac','aac','m4a'] %}
+    {% set is_code  = ext in ['py','js','ts','html','css','json','xml','yaml','yml','sh','md','txt'] %}
+    {% set can_preview = is_img or is_pdf or is_video or is_audio or is_code %}
+    {% set file_path = item.parent_path + item.name %}
+
+    {% if is_pdf %}{% set fi_cls='fi-pdf'%}{% set fi_icon='bi-file-pdf'%}
+    {% elif is_img %}{% set fi_cls='fi-img'%}{% set fi_icon='bi-file-image'%}
+    {% elif is_video %}{% set fi_cls='fi-video'%}{% set fi_icon='bi-file-play'%}
+    {% elif is_audio %}{% set fi_cls='fi-audio'%}{% set fi_icon='bi-file-music'%}
+    {% elif is_code %}{% set fi_cls='fi-code'%}{% set fi_icon='bi-file-code'%}
+    {% else %}{% set fi_cls='fi-def'%}{% set fi_icon='bi-file-earmark'%}
+    {% endif %}
+
+    <div class="yd-file-card"
+         data-preview-url="{{ url_for('files.preview_file', path=file_path) }}"
+         data-download-url="{{ url_for('files.download_file', path=file_path) }}"
+         data-name="{{ item.name }}"
+         data-can-preview="{{ 'true' if can_preview else 'false' }}"
+         data-ptype="{% if is_img %}img{% elif is_pdf %}pdf{% elif is_video %}video{% elif is_audio %}audio{% elif is_code %}text{% endif %}"
+         ondblclick="handleDblClick(this)"
+         title="{{ item.name }}">
+        <div class="yd-file-thumb">
+            {% if is_img %}
+            <img src="{{ url_for('files.preview_file', path=file_path) }}" alt="{{ item.name }}" loading="lazy"
+                 onerror="this.parentElement.innerHTML='<div class=\'file-icon-wrap fi-img\'><i class=\'bi bi-file-image\'></i></div>'">
+            {% else %}
+            <div class="file-icon-wrap {{ fi_cls }}"><i class="bi {{ fi_icon }}"></i></div>
+            {% endif %}
+        </div>
+        <span class="yd-file-name">{{ item.name }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+</div>
+
+<div class="modal fade yd-preview" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><span id="pv-title-text"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="pv-body"></div>
+      <div class="modal-footer">
+        <a id="pv-download" href="#" class="pv-action-btn"><i class="bi bi-download"></i> Скачать</a>
+        <button type="button" class="pv-action-btn" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function handleDblClick(el) {
+    if (el.dataset.canPreview === 'true') openPreview(el);
+    else window.location.href = el.dataset.downloadUrl;
+}
+function openPreview(el) {
+    const name=el.dataset.name, type=el.dataset.ptype, url=el.dataset.previewUrl;
+    document.getElementById('pv-title-text').textContent = name;
+    document.getElementById('pv-download').href = el.dataset.downloadUrl;
+    const body=document.getElementById('pv-body');
+    body.innerHTML='<div style="padding:48px;color:#888;"><div class="spinner-border text-light"></div></div>';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('previewModal')).show();
+    if (type==='img') { const img=document.createElement('img'); img.id='pv-img'; img.src=url; img.onload=()=>{body.innerHTML='';body.appendChild(img);}; }
+    else if (type==='pdf') { body.innerHTML=`<iframe id="pv-iframe" src="${url}"></iframe>`; }
+    else if (type==='video') { body.innerHTML=`<video id="pv-video" controls autoplay src="${url}"></video>`; }
+    else if (type==='audio') { body.innerHTML=`<div id="pv-audio-wrap"><i class="bi bi-music-note-beamed"></i><p>${name}</p><audio controls><source src="${url}"></audio></div>`; }
+    else if (type==='text') { fetch(url).then(r=>r.text()).then(t=>{const pre=document.createElement('pre');pre.id='pv-text';pre.textContent=t.length>60000?t.slice(0,60000)+'\n[обрезано]':t;body.innerHTML='';body.appendChild(pre);}); }
+}
+document.getElementById('previewModal').addEventListener('hidden.bs.modal',()=>{
+    const b=document.getElementById('pv-body'), v=b.querySelector('video,audio');
+    if(v){v.pause();v.src='';} b.innerHTML='';
+});
+</script>
+{% endblock %}

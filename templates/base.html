@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Диск{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --yd-yellow: #FFDB4D;
+            --yd-yellow-dark: #FCC521;
+            --yd-yellow-light: #FFF9DB;
+            --yd-border: #E6E6E6;
+            --yd-text: #1C1B20;
+            --yd-muted: #999;
+            --yd-hover: #F5F5F5;
+            --yd-active: #FFF9DB;
+            --yd-sidebar-w: 220px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            color: var(--yd-text);
+            background: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* ── App shell ── */
+        .yd-shell { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+
+        /* ── Sidebar ── */
+        .yd-sidebar {
+            width: var(--yd-sidebar-w);
+            background: #fff;
+            border-right: 1px solid var(--yd-border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .yd-sidebar-head {
+            height: 52px;
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            gap: 10px;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--yd-border);
+        }
+        .yd-logo-badge {
+            width: 28px; height: 28px;
+            background: #FC3F1D;
+            border-radius: 7px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .yd-logo-badge svg { width: 18px; height: 18px; }
+        .yd-sidebar-title { font-size: 17px; font-weight: 700; flex: 1; }
+        .yd-user-avatar {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--yd-yellow);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; color: #7a6000;
+            flex-shrink: 0; cursor: pointer;
+        }
+
+        .yd-sidebar-actions { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        .yd-btn-upload {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            background: var(--yd-yellow); color: var(--yd-text);
+            border: none; border-radius: 8px; padding: 9px 16px;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            transition: background .15s; width: 100%;
+        }
+        .yd-btn-upload:hover { background: var(--yd-yellow-dark); }
+        .yd-btn-create {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            background: none; color: var(--yd-text);
+            border: 1.5px solid var(--yd-border); border-radius: 8px; padding: 8px 16px;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            transition: background .15s; width: 100%;
+        }
+        .yd-btn-create:hover { background: var(--yd-hover); }
+
+        /* ── Sidebar nav ── */
+        .yd-nav { flex: 1; overflow-y: auto; padding: 6px 8px; }
+        .yd-nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-radius: 8px;
+            color: var(--yd-text); text-decoration: none; font-size: 14px;
+            transition: background .15s; white-space: nowrap;
+        }
+        .yd-nav-item:hover { background: var(--yd-hover); color: var(--yd-text); }
+        .yd-nav-item.active { background: var(--yd-active); color: var(--yd-text); font-weight: 500; }
+        .yd-nav-item i { font-size: 16px; flex-shrink: 0; color: #666; }
+        .yd-nav-item.active i { color: #a07000; }
+
+        /* ── Storage indicator ── */
+        .yd-storage { padding: 12px; border-top: 1px solid var(--yd-border); flex-shrink: 0; }
+        .yd-storage-label { font-size: 11px; color: var(--yd-muted); margin-bottom: 6px; }
+        .yd-storage-bar { background: #E6E6E6; border-radius: 4px; height: 5px; margin-bottom: 6px; overflow: hidden; }
+        .yd-storage-fill { background: var(--yd-yellow-dark); height: 100%; border-radius: 4px; }
+        .yd-storage-nums { font-size: 12px; color: var(--yd-text); }
+        .yd-storage-nums b { font-weight: 600; }
+
+        /* ── Logout link ── */
+        .yd-logout {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 12px; border-top: 1px solid var(--yd-border);
+            color: var(--yd-muted); text-decoration: none; font-size: 13px;
+            transition: background .15s; flex-shrink: 0;
+        }
+        .yd-logout:hover { background: var(--yd-hover); color: var(--yd-text); }
+
+        /* ── Main area ── */
+        .yd-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+        .yd-main-head {
+            height: 52px; display: flex; align-items: center;
+            padding: 0 24px; border-bottom: 1px solid var(--yd-border);
+            gap: 12px; flex-shrink: 0; transition: background .2s;
+        }
+        .yd-main-head.selected { background: #1C1B20; }
+        .yd-main-title { font-size: 20px; font-weight: 600; flex: 1; }
+
+        /* ── Selection bar ── */
+        .sel-info { display: flex; align-items: center; gap: 10px; flex: 1; }
+        .sel-icon { color: rgba(255,255,255,.5); font-size: 16px; }
+        .sel-name { font-size: 15px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+        .sel-actions { display: flex; align-items: center; gap: 4px; }
+        .sel-btn {
+            display: flex; align-items: center; gap: 6px;
+            background: none; border: none; border-radius: 8px;
+            padding: 6px 12px; font-size: 13px; color: rgba(255,255,255,.8);
+            cursor: pointer; transition: background .15s; text-decoration: none; white-space: nowrap;
+        }
+        .sel-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
+        .sel-btn.danger:hover { background: rgba(244,67,54,.25); color: #ff8a80; }
+        .sel-btn i { font-size: 14px; }
+        .sel-sep { width: 1px; height: 20px; background: rgba(255,255,255,.15); margin: 0 4px; }
+        .sel-close { width: 32px; height: 32px; border-radius: 50%; background: none; border: none; color: rgba(255,255,255,.6); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+        .sel-close:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+        /* Dropdown menu */
+        .sel-more-menu { border-radius: 10px !important; border: 1px solid #eee !important; box-shadow: 0 4px 20px rgba(0,0,0,.12) !important; padding: 4px !important; min-width: 180px; }
+        .sel-more-menu .dropdown-item { border-radius: 6px; font-size: 14px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; color: var(--yd-text); }
+        .sel-more-menu .dropdown-item:hover { background: var(--yd-hover); }
+        .sel-more-menu .dropdown-item i { font-size: 15px; color: #666; }
+
+        .yd-sort-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1.5px solid var(--yd-border); border-radius: 8px; padding: 5px 12px; font-size: 13px; color: var(--yd-text); cursor: pointer; }
+        .yd-view-toggle { display: flex; align-items: center; border: 1.5px solid var(--yd-border); border-radius: 8px; overflow: hidden; }
+        .yd-view-btn { background: none; border: none; padding: 5px 10px; cursor: pointer; color: var(--yd-muted); font-size: 15px; }
+        .yd-view-btn.active { background: var(--yd-yellow-light); color: #a07000; }
+
+        /* ── Search bar ── */
+        .yd-search-bar { height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px; border-bottom: 1px solid var(--yd-border); flex-shrink: 0; }
+        .yd-search-input { flex: 1; border: 1.5px solid var(--yd-border); border-radius: 8px; padding: 8px 14px; font-size: 14px; outline: none; transition: border-color .2s; }
+        .yd-search-input:focus { border-color: var(--yd-yellow-dark); }
+
+        /* ── Breadcrumb ── */
+        .yd-breadcrumb { display: flex; align-items: center; gap: 2px; padding: 8px 24px 0; font-size: 13px; color: var(--yd-muted); flex-shrink: 0; }
+        .yd-breadcrumb a { color: var(--yd-muted); text-decoration: none; }
+        .yd-breadcrumb a:hover { color: var(--yd-text); text-decoration: underline; }
+        .yd-breadcrumb .active { color: var(--yd-text); font-weight: 500; }
+
+        /* ── Content scroll ── */
+        .yd-content { flex: 1; overflow-y: auto; padding: 16px 24px 80px; }
+
+        /* ── Alerts ── */
+        .yd-alerts { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 400px; }
+        .yd-alert { background: #fff; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.15); padding: 12px 16px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; border-left: 4px solid #ccc; animation: slideIn .2s ease; }
+        .yd-alert.success { border-color: #4CAF50; } .yd-alert.success .yd-alert-icon { color: #4CAF50; }
+        .yd-alert.danger  { border-color: #F44336; } .yd-alert.danger  .yd-alert-icon { color: #F44336; }
+        .yd-alert.warning { border-color: #FCC521; } .yd-alert.warning .yd-alert-icon { color: #FCC521; }
+        .yd-alert.info    { border-color: #2196F3; } .yd-alert.info    .yd-alert-icon { color: #2196F3; }
+        .yd-alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .yd-alert-text { flex: 1; line-height: 1.5; word-break: break-all; }
+        .yd-alert-close { background: none; border: none; color: var(--yd-muted); cursor: pointer; font-size: 18px; padding: 0; line-height: 1; }
+        @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* ── Drop overlay ── */
+        .yd-drop-overlay { display: none; position: fixed; inset: 0; background: rgba(255,219,77,.15); border: 3px dashed var(--yd-yellow-dark); z-index: 8888; pointer-events: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+        .yd-drop-overlay.show { display: flex; }
+        .yd-drop-overlay i { font-size: 64px; color: var(--yd-yellow-dark); }
+        .yd-drop-overlay p { font-size: 20px; font-weight: 600; color: #a07000; }
+
+        /* ── Delete confirmation modal ── */
+        .yd-del-modal .modal-content { border-radius: 14px; border: none; box-shadow: 0 8px 40px rgba(0,0,0,.18); }
+        .yd-del-modal .modal-header { border-bottom: 1px solid #eee; padding: 18px 20px 14px; }
+        .yd-del-modal .modal-body { padding: 4px 20px 10px; }
+        .yd-del-modal .modal-footer { border-top: 1px solid #eee; padding: 12px 20px; gap: 8px; }
+        .yd-del-title { font-size: 16px; font-weight: 600; }
+        .yd-del-sub { font-size: 13px; color: #666; line-height: 1.5; margin-top: 2px; }
+        .yd-del-check { display: flex; align-items: center; gap: 8px; margin-top: 14px; cursor: pointer; font-size: 13px; color: #555; }
+        .yd-del-check input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--yd-yellow-dark); }
+
+        /* ── Context menu ── */
+        .yd-ctx-menu {
+            position: fixed; z-index: 10000; display: none;
+            background: #fff; border-radius: 12px;
+            border: 1px solid rgba(0,0,0,.08);
+            box-shadow: 0 6px 28px rgba(0,0,0,.16); padding: 5px;
+            min-width: 210px; user-select: none;
+        }
+        .yd-ctx-menu.show { display: block; }
+        .yd-ctx-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 7px 10px; border-radius: 8px; cursor: pointer;
+            font-size: 14px; color: var(--yd-text); white-space: nowrap;
+            transition: background .1s;
+        }
+        .yd-ctx-item:hover { background: var(--yd-hover); }
+        .yd-ctx-item.danger { color: #E53935; }
+        .yd-ctx-item.danger:hover { background: #FFEBEE; }
+        .yd-ctx-item.disabled { color: #bbb; cursor: default; pointer-events: none; }
+        .yd-ctx-icon {
+            width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .yd-ctx-sep { height: 1px; background: #eee; margin: 4px 0; }
+
+        /* ── Upload progress panel ── */
+        .yd-up-panel { position:fixed; bottom:20px; right:20px; z-index:9990; width:340px; background:#fff; border-radius:12px; box-shadow:0 4px 28px rgba(0,0,0,.22); overflow:hidden; display:none; flex-direction:column; }
+        .yd-up-panel.show { display:flex; }
+        .yd-up-panel.minimized .yd-up-body { display:none; }
+        .yd-up-hd { background:#1976D2; color:#fff; display:flex; align-items:center; padding:11px 14px; gap:8px; cursor:default; }
+        .yd-up-hd-title { flex:1; font-size:14px; font-weight:600; }
+        .yd-up-hd-btn { background:none; border:none; color:rgba(255,255,255,.85); cursor:pointer; font-size:12px; padding:4px 8px; border-radius:6px; line-height:1; white-space:nowrap; }
+        .yd-up-hd-btn:hover { background:rgba(255,255,255,.18); color:#fff; }
+        .yd-up-body { padding:6px 8px; max-height:250px; overflow-y:auto; }
+        .yd-up-row { display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; }
+        .yd-up-row-ico { width:34px; height:34px; border-radius:6px; background:#FFF9DB; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .yd-up-row-ico i { color:#FFD740; font-size:18px; }
+        .yd-up-row-info { flex:1; min-width:0; }
+        .yd-up-row-name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .yd-up-row-meta { font-size:11px; color:#999; margin-top:2px; }
+        .yd-up-row-bar { width:72px; flex-shrink:0; }
+        .yd-up-bar-bg  { background:#E3F2FD; border-radius:3px; height:4px; }
+        .yd-up-bar-fill{ background:#1976D2; border-radius:3px; height:4px; width:0; transition:width .2s; }
+
+        /* ── Copy picker modal ── */
+        .yd-copy-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; cursor:pointer; font-size:14px; color:var(--yd-text); transition:background .12s; }
+        .yd-copy-row:hover { background:var(--yd-hover); }
+        .yd-copy-row.sel { background:#FFF9DB; outline:1.5px solid #FCC521; }
+        .yd-copy-row.dim { opacity:.4; pointer-events:none; }
+        .yd-copy-bc { padding:6px 20px 0; font-size:12px; color:#999; display:flex; align-items:center; gap:2px; flex-wrap:wrap; min-height:22px; }
+        .yd-copy-bc a { color:#999; text-decoration:none; }
+        .yd-copy-bc a:last-child { color:var(--yd-text); font-weight:500; }
+        .yd-copy-bc a:hover { text-decoration:underline; }
+
+        {% block extra_styles %}{% endblock %}
+    </style>
+</head>
+<body>
+
+<div class="yd-drop-overlay" id="dropOverlay">
+    <i class="bi bi-cloud-arrow-up"></i>
+    <p>Отпустите для загрузки</p>
+</div>
+
+<div class="yd-alerts" id="alerts">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="yd-alert {{ category }}">
+                <i class="yd-alert-icon bi bi-{% if category == 'success' %}check-circle-fill{% elif category == 'danger' %}x-circle-fill{% elif category == 'warning' %}exclamation-triangle-fill{% else %}info-circle-fill{% endif %}"></i>
+                <span class="yd-alert-text">{{ message | safe }}</span>
+                <button class="yd-alert-close" onclick="this.closest('.yd-alert').remove()">×</button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+</div>
+
+<div class="yd-shell">
+    {% if current_user.is_authenticated %}
+    <div class="yd-sidebar">
+        <div class="yd-sidebar-head">
+            <div class="yd-logo-badge">
+                <svg viewBox="0 0 18 18" fill="none"><path d="M10.4 2H8.2C6.6 2 5.5 3.1 5.5 5.02 5.5 6.68 6.2 7.5 7.4 8.3l.9.56L5.1 14h2.1l2.8-5.4-1-.65C7.9 7.18 7.3 6.6 7.3 5.2c0-.9.6-1.4 1.56-1.4h1.54V2Z" fill="#fff"/><path d="M10.4 2H12V14h-2V3.8h.4V2Z" fill="#fff"/></svg>
+            </div>
+            <span class="yd-sidebar-title">Диск</span>
+            <div class="yd-user-avatar" title="{{ current_user.username }}">
+                {{ current_user.username[0].upper() }}
+            </div>
+        </div>
+        <div class="yd-sidebar-actions">
+            <button class="yd-btn-upload" id="sidebarUploadBtn">
+                <i class="bi bi-cloud-upload"></i> Загрузить
+            </button>
+            <button class="yd-btn-create" data-bs-toggle="modal" data-bs-target="#mkdirModal">
+                <i class="bi bi-plus-lg"></i> Создать папку
+            </button>
+        </div>
+        <nav class="yd-nav">
+            <a class="yd-nav-item {% if request.endpoint == 'files.list_files' %}active{% endif %}"
+               href="{{ url_for('files.list_files') }}">
+                <i class="bi bi-folder2"></i> Файлы
+            </a>
+            <a class="yd-nav-item {% if request.endpoint == 'files.search' %}active{% endif %}"
+               href="#" onclick="toggleSearch(event)">
+                <i class="bi bi-search"></i> Поиск
+            </a>
+            <a class="yd-nav-item {% if request.endpoint == 'files.trash' %}active{% endif %}"
+               href="{{ url_for('files.trash') }}">
+                <i class="bi bi-trash3"></i> Корзина
+            </a>
+        </nav>
+
+        <!-- Disk space -->
+        <div class="yd-storage">
+            {% if disk_total > 0 %}
+            {% set free_gb = (disk_free / 1073741824) | round(1) %}
+            {% set total_gb = (disk_total / 1073741824) | round(0) | int %}
+            {% set used_pct = [((1 - disk_free / disk_total) * 100) | round(1), 100] | min %}
+            <div class="yd-storage-label">Место на диске</div>
+            <div class="yd-storage-bar">
+                <div class="yd-storage-fill" style="width:{{ used_pct }}%;"></div>
+            </div>
+            <div class="yd-storage-nums">
+                Свободно <b>{{ free_gb }} ГБ</b> из {{ total_gb }} ГБ
+            </div>
+            {% endif %}
+        </div>
+
+        <a href="{{ url_for('auth.logout') }}" class="yd-logout">
+            <i class="bi bi-box-arrow-right"></i> Выйти
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="yd-main">
+        {% block main %}{% endblock %}
+    </div>
+</div>
+
+<!-- Hidden upload form -->
+{% if current_user.is_authenticated %}
+<form method="POST" action="{{ url_for('files.upload_file', path=request.args.get('path', '/')) }}"
+      enctype="multipart/form-data" id="globalUploadForm" style="display:none;">
+    <input type="file" id="globalFileInput" name="file" multiple>
+</form>
+
+<!-- Mkdir modal -->
+<div class="modal fade" id="mkdirModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
+    <form method="POST" action="{{ url_for('files.mkdir', path=request.args.get('path', '/')) }}">
+      <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+        <div class="modal-header" style="border-bottom:1px solid #eee;padding:16px 20px;">
+          <h5 class="modal-title" style="font-size:16px;font-weight:600;">Новая папка</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+          <input type="text" class="form-control" name="folder_name" placeholder="Название папки"
+                 style="border-radius:8px;padding:9px 14px;border:1.5px solid #ddd;" required autofocus>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid #eee;padding:12px 20px;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:8px 18px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;">Создать</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Rename modal -->
+<div class="modal fade" id="renameModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
+    <form method="POST" action="{{ url_for('files.rename_item') }}" id="renameForm">
+      <input type="hidden" name="item_id" id="renameItemId">
+      <input type="hidden" name="return_path" value="{{ request.args.get('path', '/') }}">
+      <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+        <div class="modal-header" style="border-bottom:1px solid #eee;padding:16px 20px;">
+          <h5 class="modal-title" style="font-size:16px;font-weight:600;">Переименовать</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+          <input type="text" class="form-control" name="new_name" id="renameInput" placeholder="Новое имя"
+                 style="border-radius:8px;padding:9px 14px;border:1.5px solid #ddd;" required>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid #eee;padding:12px 20px;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:8px 18px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;">Сохранить</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Copy form (hidden) -->
+<form method="POST" action="{{ url_for('files.copy_item') }}" id="copyForm" style="display:none;">
+    <input type="hidden" name="item_id" id="copyItemId">
+    <input type="hidden" name="return_path" value="{{ request.args.get('path', '/') }}">
+</form>
+
+<!-- Move form (hidden) -->
+<form method="POST" action="{{ url_for('files.move_item') }}" id="moveForm" style="display:none;">
+    <input type="hidden" name="item_id" id="moveItemId">
+    <input type="hidden" name="dest_path" id="moveDestPath">
+    <input type="hidden" name="return_path" value="{{ request.args.get('path', '/') }}">
+</form>
+
+<!-- Move modal -->
+<div class="modal fade" id="moveModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+      <div class="modal-header" style="border-bottom:1px solid #eee;padding:16px 20px 10px;">
+        <div>
+          <h5 class="modal-title" style="font-size:15px;font-weight:600;" id="moveModalTitle"><i class="bi bi-folder-symlink me-2"></i>Переместить в…</h5>
+          <div class="yd-copy-bc" id="moveBreadcrumb" style="padding:4px 0 0;"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" style="margin-left:auto;flex-shrink:0;"></button>
+      </div>
+      <div class="modal-body" style="padding:8px 12px;max-height:320px;overflow-y:auto;">
+        <div id="moveFolderList" style="display:flex;flex-direction:column;gap:2px;"></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #eee;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <button type="button" onclick="_pickerMkdir('move')" style="background:none;border:none;color:#1976D2;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;"><i class="bi bi-plus-lg"></i> Новая папка</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:7px 16px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="yd-btn-upload" style="width:auto;padding:7px 18px;" id="moveConfirmBtn" disabled>
+            <i class="bi bi-folder-symlink"></i> Переместить
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Copy picker modal -->
+<div class="modal fade" id="copyModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+      <div class="modal-header" style="border-bottom:1px solid #eee;padding:16px 20px 10px;">
+        <div>
+          <h5 class="modal-title" style="font-size:15px;font-weight:600;" id="copyModalTitle">Куда копировать?</h5>
+          <div class="yd-copy-bc" id="copyBreadcrumb" style="padding:4px 0 0;"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" style="margin-left:auto;flex-shrink:0;"></button>
+      </div>
+      <div class="modal-body" style="padding:8px 12px;max-height:320px;overflow-y:auto;">
+        <div id="copyFolderList" style="display:flex;flex-direction:column;gap:2px;"></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #eee;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <button type="button" onclick="_pickerMkdir('copy')" style="background:none;border:none;color:#1976D2;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;"><i class="bi bi-plus-lg"></i> Новая папка</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:7px 16px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="yd-btn-upload" style="width:auto;padding:7px 18px;" id="copyConfirmBtn" disabled>
+            <i class="bi bi-files"></i> Копировать
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Copy-to hidden form -->
+<form method="POST" action="{{ url_for('files.copy_to') }}" id="copyToForm" style="display:none;">
+    <input type="hidden" name="item_id"    id="copyToItemId">
+    <input type="hidden" name="dest_path"  id="copyToDestPath">
+    <input type="hidden" name="return_path" value="{{ request.args.get('path', '/') }}">
+</form>
+{% endif %}
+
+<!-- Delete confirmation modal (global) -->
+<div class="modal fade yd-del-modal" id="deleteConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title yd-del-title" id="deleteModalTitle">Удалить файл?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="yd-del-sub">В корзине файлы и папки будут 30 дней, потом удалятся навсегда</p>
+        <label class="yd-del-check">
+          <input type="checkbox" id="deleteSkipCheck"> Больше не спрашивать
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="yd-btn-create" style="width:auto;padding:8px 20px;" data-bs-dismiss="modal">Отменить</button>
+        <button type="button" class="yd-btn-upload"  style="width:auto;padding:8px 20px;" id="deleteConfirmBtn">Удалить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<div class="yd-ctx-menu" id="ctxMenu"></div>
+
+{% if current_user.is_authenticated %}
+<!-- Batch delete form -->
+<form method="POST" action="{{ url_for('files.delete_batch') }}" id="deleteBatchForm" style="display:none;">
+    <input type="hidden" name="return_path" id="deleteBatchReturn">
+    <div id="deleteBatchIds"></div>
+</form>
+<!-- Batch move form -->
+<form method="POST" action="{{ url_for('files.move_batch') }}" id="moveBatchForm" style="display:none;">
+    <input type="hidden" name="dest_path"   id="moveBatchDest">
+    <input type="hidden" name="return_path" id="moveBatchReturn">
+    <div id="moveBatchIds"></div>
+</form>
+{% endif %}
+
+<!-- Upload progress panel -->
+<div class="yd-up-panel" id="uploadPanel">
+    <div class="yd-up-hd">
+        <span class="yd-up-hd-title" id="uploadPanelTitle">Загрузка 0%</span>
+        <button class="yd-up-hd-btn" id="uploadMinBtn">Свернуть</button>
+        <button class="yd-up-hd-btn" style="font-size:16px;line-height:1;" onclick="document.getElementById('uploadPanel').classList.remove('show')">×</button>
+    </div>
+    <div class="yd-up-body" id="uploadPanelBody"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Auto-dismiss alerts
+document.querySelectorAll('.yd-alert').forEach(el => {
+    setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; }, 5000);
+    setTimeout(() => el.remove(), 5300);
+});
+
+// Search toggle
+function toggleSearch(e) {
+    e.preventDefault();
+    const bar = document.getElementById('searchBar');
+    if (!bar) { window.location = '{{ url_for("files.list_files") }}'; return; }
+    bar.style.display = bar.style.display === 'none' ? 'flex' : 'none';
+    if (bar.style.display === 'flex') bar.querySelector('input').focus();
+}
+
+// Upload via XHR with progress panel
+const sidebarUploadBtn = document.getElementById('sidebarUploadBtn');
+const globalFileInput  = document.getElementById('globalFileInput');
+const globalUploadForm = document.getElementById('globalUploadForm');
+if (sidebarUploadBtn) sidebarUploadBtn.addEventListener('click', () => globalFileInput && globalFileInput.click());
+if (globalFileInput)  globalFileInput.addEventListener('change', () => { if (globalFileInput.files.length) startXHRUpload(globalFileInput.files); });
+
+function _fmtSize(b) {
+    if (b < 1024) return b + ' Б';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' КБ';
+    return (b/1048576).toFixed(1) + ' МБ';
+}
+
+function startXHRUpload(files) {
+    if (!files || !files.length || !globalUploadForm) return;
+    const panel   = document.getElementById('uploadPanel');
+    const body    = document.getElementById('uploadPanelBody');
+    const title   = document.getElementById('uploadPanelTitle');
+    const hd      = panel.querySelector('.yd-up-hd');
+    body.innerHTML = '';
+    hd.style.background = '#1976D2';
+    panel.classList.add('show');
+    panel.classList.remove('minimized');
+
+    const fileArr = Array.from(files);
+    const bars = fileArr.map((file, i) => {
+        const row = document.createElement('div');
+        row.className = 'yd-up-row';
+        row.innerHTML = `
+          <div class="yd-up-row-ico"><i class="bi bi-file-earmark"></i></div>
+          <div class="yd-up-row-info">
+            <div class="yd-up-row-name">${file.name}</div>
+            <div class="yd-up-row-meta">${_fmtSize(file.size)}</div>
+          </div>
+          <div class="yd-up-row-bar"><div class="yd-up-bar-bg"><div class="yd-up-bar-fill" id="_upbar${i}"></div></div></div>`;
+        body.appendChild(row);
+        return document.getElementById(`_upbar${i}`);
+    });
+
+    const fd = new FormData();
+    fileArr.forEach(f => fd.append('file', f));
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = e => {
+        if (!e.lengthComputable) return;
+        const pct = Math.round(e.loaded / e.total * 100);
+        title.textContent = `Загрузка ${pct}%`;
+        bars.forEach(b => { if (b) b.style.width = pct + '%'; });
+    };
+    xhr.onload = () => {
+        title.textContent = 'Загружено!';
+        bars.forEach(b => { if (b) b.style.width = '100%'; });
+        setTimeout(() => { panel.classList.remove('show'); window.location.reload(); }, 1400);
+    };
+    xhr.onerror = () => { hd.style.background='#E53935'; title.textContent = 'Ошибка загрузки'; };
+    xhr.open('POST', globalUploadForm.action);
+    xhr.send(fd);
+}
+
+// Drag & drop
+const overlay = document.getElementById('dropOverlay');
+let dragCount = 0;
+document.addEventListener('dragenter', e => { if (e.dataTransfer?.types.includes('Files')) { dragCount++; overlay.classList.add('show'); } });
+document.addEventListener('dragleave', () => { dragCount--; if (dragCount <= 0) { dragCount=0; overlay.classList.remove('show'); } });
+document.addEventListener('dragover',  e => e.preventDefault());
+document.addEventListener('drop', e => {
+    e.preventDefault(); dragCount = 0; overlay.classList.remove('show');
+    if (e.dataTransfer.files.length && globalFileInput) startXHRUpload(e.dataTransfer.files);
+});
+
+// ── Toast helper ─────────────────────────────────────────────────────────────
+function showToast(msg, type) {
+    type = type || 'info';
+    const icons = {success:'check-circle-fill', danger:'x-circle-fill', warning:'exclamation-triangle-fill', info:'info-circle-fill'};
+    const div = document.createElement('div');
+    div.className = `yd-alert ${type}`;
+    div.innerHTML = `<i class="yd-alert-icon bi bi-${icons[type]||icons.info}"></i><span class="yd-alert-text">${msg}</span><button class="yd-alert-close" onclick="this.closest('.yd-alert').remove()">×</button>`;
+    document.getElementById('alerts').appendChild(div);
+    setTimeout(() => { div.style.opacity='0'; div.style.transition='opacity .3s'; }, 4000);
+    setTimeout(() => div.remove(), 4300);
+}
+
+// ── Delete confirmation modal ────────────────────────────────────────────────
+let _delPendingUrl   = null;
+let _delPendingIds   = null;
+let _delPendingReturn = null;
+
+function confirmDelete(deleteUrl, name, type, returnPath) {
+    if (localStorage.getItem('disk_skip_del') === '1') {
+        _execDelete(deleteUrl, null, returnPath); return;
+    }
+    _delPendingUrl = deleteUrl; _delPendingIds = null; _delPendingReturn = returnPath || '/';
+    document.getElementById('deleteModalTitle').textContent = type === 'folder' ? 'Удалить папку?' : 'Удалить файл?';
+    document.getElementById('deleteSkipCheck').checked = false;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteConfirmModal')).show();
+}
+
+function confirmDeleteBatch(ids, returnPath) {
+    if (localStorage.getItem('disk_skip_del') === '1') {
+        _execDeleteBatch(ids, returnPath); return;
+    }
+    _delPendingUrl = null; _delPendingIds = ids; _delPendingReturn = returnPath || '/';
+    const n = ids.length;
+    document.getElementById('deleteModalTitle').textContent = `Удалить ${n} элемент${n===1?'':'а'}?`;
+    document.getElementById('deleteSkipCheck').checked = false;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteConfirmModal')).show();
+}
+
+function _execDelete(url, ids, returnPath) {
+    if (url) {
+        const f = document.createElement('form'); f.method='POST'; f.action=url;
+        (document.getElementById('hiddenForms')||document.body).appendChild(f); f.submit();
+    } else { _execDeleteBatch(ids, returnPath); }
+}
+
+function _execDeleteBatch(ids, returnPath) {
+    const ret  = document.getElementById('deleteBatchReturn');
+    const cont = document.getElementById('deleteBatchIds');
+    if (ret)  ret.value = returnPath || '/';
+    if (cont) { cont.innerHTML=''; ids.forEach(id => { const i=document.createElement('input'); i.type='hidden'; i.name='ids[]'; i.value=id; cont.appendChild(i); }); }
+    document.getElementById('deleteBatchForm').submit();
+}
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+function showCtxMenu(e, items) {
+    e.preventDefault();
+    const menu = document.getElementById('ctxMenu');
+    menu.innerHTML = '';
+    items.forEach(item => {
+        if (item === 'sep') {
+            const s = document.createElement('div'); s.className='yd-ctx-sep'; menu.appendChild(s);
+        } else {
+            const d = document.createElement('div');
+            d.className = 'yd-ctx-item' + (item.danger?' danger':'') + (item.disabled?' disabled':'');
+            d.innerHTML = `<div class="yd-ctx-icon" style="background:${item.bg||'#f5f5f5'};color:${item.color||'#666'}">${item.icon}</div><span>${item.label}</span>`;
+            if (item.action) d.addEventListener('click', ev => { ev.stopPropagation(); menu.classList.remove('show'); item.action(); });
+            menu.appendChild(d);
+        }
+    });
+    const x = Math.min(e.clientX, window.innerWidth  - 230);
+    const y = Math.min(e.clientY, window.innerHeight - 20);
+    menu.style.left = x+'px'; menu.style.top = y+'px';
+    menu.classList.add('show');
+    requestAnimationFrame(() => {
+        const r = menu.getBoundingClientRect();
+        if (r.bottom > window.innerHeight - 8) menu.style.top = (e.clientY - r.height - 4)+'px';
+    });
+}
+document.addEventListener('click',       () => document.getElementById('ctxMenu').classList.remove('show'));
+document.addEventListener('contextmenu', () => document.getElementById('ctxMenu').classList.remove('show'), true);
+
+// ── Disk space refresh ────────────────────────────────────────────────────────
+function refreshDiskSpace() {
+    fetch('{{ url_for("files.api_disk_space") }}').then(r=>r.json()).then(d => {
+        const fill = document.querySelector('.yd-storage-fill');
+        const nums = document.querySelector('.yd-storage-nums');
+        if (!fill||!nums) return;
+        const pct  = Math.min((d.used/d.total*100),100).toFixed(1);
+        const freeGb  = (d.free/1073741824).toFixed(1);
+        const totalGb = Math.round(d.total/1073741824);
+        fill.style.width = pct+'%';
+        nums.innerHTML = `Свободно <b>${freeGb} ГБ</b> из ${totalGb} ГБ`;
+    }).catch(()=>{});
+}
+
+// ── Rename modal helper ───────────────────────────────────────────────────────
+function openRename(itemId, currentName) {
+    document.getElementById('renameItemId').value = itemId;
+    document.getElementById('renameInput').value = currentName;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('renameModal')).show();
+    setTimeout(() => document.getElementById('renameInput').select(), 200);
+}
+
+// ── Folder picker (shared: copy + move) ──────────────────────────────────────
+const FOLDERS_URL = '{{ url_for("files.folders_list") }}';
+let _moveSelectedPath = null;
+let _moveBatchIds     = null;
+let _moveBrowsePath   = '/';
+let _moveSkipPath     = null;
+let _copySelectedPath = '/';
+let _copyItemId       = null;
+let _copyBrowsePath   = '/';
+
+function _buildBreadcrumb(bcEl, browsePath, onCrumbClick) {
+    bcEl.innerHTML = '';
+    const parts = browsePath === '/' ? [] : browsePath.slice(1,-1).split('/');
+    const crumbs = [{name:'Файлы', path:'/'}];
+    let p = '/';
+    parts.forEach(pt => { p += pt + '/'; crumbs.push({name:pt, path:p}); });
+    crumbs.forEach((cr, i) => {
+        if (i > 0) { const s=document.createElement('span'); s.textContent=' › '; bcEl.appendChild(s); }
+        const a = document.createElement('a'); a.href='#'; a.textContent = cr.name;
+        a.addEventListener('click', e => { e.preventDefault(); onCrumbClick(cr.path); });
+        bcEl.appendChild(a);
+    });
+}
+
+function _renderPickerList(listEl, folders, browsePath, skipPath, selectedPath, onSelect, onNavigate) {
+    listEl.innerHTML = '';
+    const subs = folders.filter(f => {
+        if (f.path === '/' || f.path === browsePath) return false;
+        if (!f.path.startsWith(browsePath)) return false;
+        return f.path.slice(browsePath.length).split('/').filter(Boolean).length === 1;
+    });
+    if (!subs.length) {
+        listEl.innerHTML = '<div style="color:#bbb;padding:20px;text-align:center;font-size:13px;">Нет вложенных папок</div>';
+        return;
+    }
+    subs.forEach(f => {
+        const dimmed = skipPath && (f.path === skipPath || f.path.startsWith(skipPath));
+        const sel    = f.path === selectedPath;
+        const row = document.createElement('div');
+        row.className = 'yd-copy-row' + (dimmed?' dim':'') + (sel?' sel':'');
+        row.innerHTML = `<i class="bi bi-folder-fill" style="color:#FFD740;font-size:20px;flex-shrink:0;margin-right:2px;"></i><span style="flex:1;">${f.name}</span><i class="bi bi-chevron-right" data-nav="1" style="color:#ccc;font-size:12px;padding:6px;margin:-6px;"></i>`;
+        row.addEventListener('click', e => {
+            if (e.target.closest('[data-nav]')) { onNavigate(f.path); return; }
+            listEl.querySelectorAll('.yd-copy-row.sel').forEach(r => r.classList.remove('sel'));
+            row.classList.add('sel');
+            onSelect(f.path);
+        });
+        row.addEventListener('dblclick', () => onNavigate(f.path));
+        listEl.appendChild(row);
+    });
+}
+
+// ── Copy picker ───────────────────────────────────────────────────────────────
+function _loadCopyFolders(browsePath) {
+    _copyBrowsePath  = browsePath;
+    _copySelectedPath = browsePath;
+    const btn = document.getElementById('copyConfirmBtn');
+    if (btn) btn.disabled = false;
+    const list = document.getElementById('copyFolderList');
+    const bc   = document.getElementById('copyBreadcrumb');
+    _buildBreadcrumb(bc, browsePath, p => _loadCopyFolders(p));
+    list.innerHTML = '<div style="color:#999;padding:16px;text-align:center;font-size:13px;"><div class="spinner-border spinner-border-sm"></div></div>';
+    fetch(FOLDERS_URL).then(r=>r.json()).then(folders =>
+        _renderPickerList(list, folders, browsePath, null, _copySelectedPath,
+            p => { _copySelectedPath=p; if (btn) btn.disabled=false; },
+            p => _loadCopyFolders(p))
+    ).catch(() => { list.innerHTML='<div style="color:#e53935;padding:16px;text-align:center;font-size:13px;">Ошибка</div>'; });
+}
+
+function openCopyTo(itemId, itemName, itemType) {
+    _copyItemId = itemId; _copyBrowsePath='/'; _copySelectedPath='/';
+    const lbl = itemType==='folder' ? `папку «${itemName}»` : `«${itemName}»`;
+    document.getElementById('copyModalTitle').textContent = `Куда копировать ${lbl}?`;
+    const btn = document.getElementById('copyConfirmBtn'); if (btn) btn.disabled=false;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('copyModal')).show();
+    _loadCopyFolders('/');
+}
+
+// ── Move picker ───────────────────────────────────────────────────────────────
+function _loadMoveFoldersPicker(browsePath) {
+    _moveBrowsePath   = browsePath;
+    _moveSelectedPath = browsePath;
+    const btn = document.getElementById('moveConfirmBtn');
+    if (btn) btn.disabled = false;
+    const list = document.getElementById('moveFolderList');
+    const bc   = document.getElementById('moveBreadcrumb');
+    _buildBreadcrumb(bc, browsePath, p => _loadMoveFoldersPicker(p));
+    list.innerHTML = '<div style="color:#999;padding:16px;text-align:center;font-size:13px;"><div class="spinner-border spinner-border-sm"></div></div>';
+    fetch(FOLDERS_URL).then(r=>r.json()).then(folders =>
+        _renderPickerList(list, folders, browsePath, _moveSkipPath, _moveSelectedPath,
+            p => { _moveSelectedPath=p; if (btn) btn.disabled=false; },
+            p => _loadMoveFoldersPicker(p))
+    ).catch(() => { list.innerHTML='<div style="color:#e53935;padding:16px;text-align:center;font-size:13px;">Ошибка</div>'; });
+}
+
+function openMove(itemId, itemName, skipPath) {
+    _moveSelectedPath='/'; _moveBatchIds=null; _moveSkipPath=skipPath||null;
+    document.getElementById('moveItemId').value = itemId;
+    const t = document.getElementById('moveModalTitle');
+    if (t) t.innerHTML = '<i class="bi bi-folder-symlink me-2"></i>Переместить в…';
+    const btn = document.getElementById('moveConfirmBtn'); if (btn) btn.disabled=false;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('moveModal')).show();
+    _loadMoveFoldersPicker('/');
+}
+
+// ── "Новая папка" inside picker ───────────────────────────────────────────────
+function _pickerMkdir(mode) {
+    const browsePath = mode==='copy' ? _copyBrowsePath : _moveBrowsePath;
+    const name = prompt('Название новой папки:');
+    if (!name || !name.trim()) return;
+    const fd = new FormData(); fd.append('folder_name', name.trim());
+    fetch('/files/mkdir?path=' + encodeURIComponent(browsePath), {method:'POST', body:fd, redirect:'manual'})
+        .then(() => { mode==='copy' ? _loadCopyFolders(browsePath) : _loadMoveFoldersPicker(browsePath); })
+        .catch(() => showToast('Ошибка создания папки', 'danger'));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Upload panel minimize toggle
+    const minBtn = document.getElementById('uploadMinBtn');
+    if (minBtn) minBtn.addEventListener('click', () => {
+        const p = document.getElementById('uploadPanel');
+        const c = p.classList.toggle('minimized');
+        minBtn.textContent = c ? 'Развернуть' : 'Свернуть';
+    });
+
+    // Delete confirm button
+    const delBtn = document.getElementById('deleteConfirmBtn');
+    if (delBtn) {
+        delBtn.addEventListener('click', () => {
+            if (document.getElementById('deleteSkipCheck').checked) localStorage.setItem('disk_skip_del','1');
+            bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal')).hide();
+            if (_delPendingUrl) _execDelete(_delPendingUrl, null, _delPendingReturn);
+            else if (_delPendingIds) _execDeleteBatch(_delPendingIds, _delPendingReturn);
+        });
+    }
+
+    // Copy confirm button
+    const copyBtn = document.getElementById('copyConfirmBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            if (!_copySelectedPath || !_copyItemId) return;
+            bootstrap.Modal.getInstance(document.getElementById('copyModal')).hide();
+            document.getElementById('copyToItemId').value   = _copyItemId;
+            document.getElementById('copyToDestPath').value = _copySelectedPath;
+            document.getElementById('copyToForm').submit();
+        });
+    }
+
+    // Move confirm button
+    const moveBtn = document.getElementById('moveConfirmBtn');
+    if (moveBtn) {
+        moveBtn.addEventListener('click', () => {
+            if (!_moveSelectedPath) return;
+            bootstrap.Modal.getInstance(document.getElementById('moveModal')).hide();
+            if (_moveBatchIds && _moveBatchIds.length > 1) {
+                const dest=document.getElementById('moveBatchDest'), ret=document.getElementById('moveBatchReturn'), cont=document.getElementById('moveBatchIds');
+                if (dest) dest.value=_moveSelectedPath;
+                if (ret)  ret.value=(typeof CURRENT_PATH!=='undefined'?CURRENT_PATH:'/');
+                if (cont) { cont.innerHTML=''; _moveBatchIds.forEach(id=>{const inp=document.createElement('input'); inp.type='hidden'; inp.name='ids[]'; inp.value=id; cont.appendChild(inp);}); }
+                document.getElementById('moveBatchForm').submit();
+            } else {
+                document.getElementById('moveDestPath').value = _moveSelectedPath;
+                document.getElementById('moveForm').submit();
+            }
+        });
+    }
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
