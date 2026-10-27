@@ -3,253 +3,342 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Диск{% endblock %}</title>
+    <title>{% block title %}{{ disk_name }}{% endblock %}</title>
+    <meta name="theme-color" content="#FFCC00">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
         :root {
-            --yd-yellow: #FFDB4D;
-            --yd-yellow-dark: #FCC521;
-            --yd-yellow-light: #FFF9DB;
-            --yd-border: #E6E6E6;
-            --yd-text: #1C1B20;
-            --yd-muted: #999;
-            --yd-hover: #F5F5F5;
-            --yd-active: #FFF9DB;
-            --yd-sidebar-w: 220px;
+            --c-primary: #FFCC00;
+            --c-primary-dark: #F2BC00;
+            --c-accent: #8A6A00;
+            --yd-yellow: #FFCC00;
+            --yd-yellow-dark: #F2BC00;
+            --yd-yellow-light: #FFF6D1;
+            --yd-border: #ECE8DC;
+            --yd-text: #24221D;
+            --yd-muted: #8F8B80;
+            --yd-hover: #FAF7EE;
+            --yd-active: #FFF1B8;
+            --yd-bg: #FAF9F5;
+            --yd-sidebar-w: 240px;
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
             font-size: 14px;
             color: var(--yd-text);
-            background: #fff;
+            background: var(--yd-bg);
             overflow: hidden;
-            height: 100vh;
+            height: 100vh; height: 100dvh;
         }
 
         /* ── App shell ── */
-        .yd-shell { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+        .yd-shell { display: flex; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; }
 
         /* ── Sidebar ── */
         .yd-sidebar {
             width: var(--yd-sidebar-w);
             background: #fff;
             border-right: 1px solid var(--yd-border);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            overflow: hidden;
+            display: flex; flex-direction: column; flex-shrink: 0;
+            overflow: hidden; z-index: 1050;
         }
-        .yd-sidebar-head {
-            height: 52px;
-            display: flex;
-            align-items: center;
-            padding: 0 14px;
-            gap: 10px;
-            flex-shrink: 0;
-            border-bottom: 1px solid var(--yd-border);
-        }
+        .yd-sidebar-head { height: 64px; display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0; }
         .yd-logo-badge {
-            width: 28px; height: 28px;
-            background: #FC3F1D;
-            border-radius: 7px;
+            width: 36px; height: 36px; background: var(--c-primary); border-radius: 11px;
             display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
+            flex-shrink: 0; color: #3D3000; font-size: 19px;
         }
-        .yd-logo-badge svg { width: 18px; height: 18px; }
-        .yd-sidebar-title { font-size: 17px; font-weight: 700; flex: 1; }
-        .yd-user-avatar {
-            width: 28px; height: 28px;
-            border-radius: 50%;
-            background: var(--yd-yellow);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700; color: #7a6000;
-            flex-shrink: 0; cursor: pointer;
-        }
+        .yd-sidebar-title { font-size: 18px; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .yd-search-trigger { width:32px; height:32px; flex-shrink:0; border:0; border-radius:9px; background:var(--yd-hover); color:var(--yd-muted); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .yd-search-trigger:hover { background:var(--yd-yellow-light); color:var(--yd-text); }
 
-        .yd-sidebar-actions { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        .yd-sidebar-actions { padding: 6px 14px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
         .yd-btn-upload {
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            background: var(--yd-yellow); color: var(--yd-text);
-            border: none; border-radius: 8px; padding: 9px 16px;
-            font-size: 14px; font-weight: 500; cursor: pointer;
-            transition: background .15s; width: 100%;
+            background: var(--c-primary); color: #24221D;
+            border: none; border-radius: 10px; padding: 9px 16px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: background .15s, transform .1s; width: 100%;
         }
-        .yd-btn-upload:hover { background: var(--yd-yellow-dark); }
+        .yd-btn-upload:hover { background: var(--c-primary-dark); }
+        .yd-btn-upload:active { transform: scale(.98); }
+        .yd-btn-upload:disabled { opacity: .5; cursor: default; }
+        .yd-sidebar .yd-btn-upload { padding: 11px 16px; font-size: 15px; }
         .yd-btn-create {
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            background: none; color: var(--yd-text);
-            border: 1.5px solid var(--yd-border); border-radius: 8px; padding: 8px 16px;
+            background: #fff; color: var(--yd-text);
+            border: 1.5px solid var(--yd-border); border-radius: 10px; padding: 8px 16px;
             font-size: 14px; font-weight: 500; cursor: pointer;
             transition: background .15s; width: 100%;
         }
         .yd-btn-create:hover { background: var(--yd-hover); }
 
         /* ── Sidebar nav ── */
-        .yd-nav { flex: 1; overflow-y: auto; padding: 6px 8px; }
+        .yd-nav { flex: 1; overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
+        .yd-nav-label { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--yd-muted); padding: 12px 10px 4px; }
         .yd-nav-item {
-            display: flex; align-items: center; gap: 10px;
-            padding: 8px 10px; border-radius: 8px;
+            display: flex; align-items: center; gap: 12px;
+            padding: 6px 10px; border-radius: 10px;
             color: var(--yd-text); text-decoration: none; font-size: 14px;
             transition: background .15s; white-space: nowrap;
         }
         .yd-nav-item:hover { background: var(--yd-hover); color: var(--yd-text); }
-        .yd-nav-item.active { background: var(--yd-active); color: var(--yd-text); font-weight: 500; }
-        .yd-nav-item i { font-size: 16px; flex-shrink: 0; color: #666; }
-        .yd-nav-item.active i { color: #a07000; }
+        .yd-nav-item.active { background: var(--yd-active); font-weight: 600; }
+        .yd-nav-ico {
+            width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0; background: #F4F2EB; color: #6B675C;
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .yd-nav-item.active .yd-nav-ico { background: var(--c-primary); color: #3D3000; }
 
         /* ── Storage indicator ── */
-        .yd-storage { padding: 12px; border-top: 1px solid var(--yd-border); flex-shrink: 0; }
-        .yd-storage-label { font-size: 11px; color: var(--yd-muted); margin-bottom: 6px; }
-        .yd-storage-bar { background: #E6E6E6; border-radius: 4px; height: 5px; margin-bottom: 6px; overflow: hidden; }
-        .yd-storage-fill { background: var(--yd-yellow-dark); height: 100%; border-radius: 4px; }
-        .yd-storage-nums { font-size: 12px; color: var(--yd-text); }
-        .yd-storage-nums b { font-weight: 600; }
+        .yd-storage { margin: 10px 14px; padding: 12px; border-radius: 12px; background: var(--yd-bg); border: 1px solid var(--yd-border); flex-shrink: 0; }
+        .yd-storage-label { font-size: 11px; color: var(--yd-muted); margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+        .yd-storage-bar { background: #ECE8DC; border-radius: 4px; height: 6px; margin-bottom: 7px; overflow: hidden; }
+        .yd-storage-fill { background: var(--c-primary); height: 100%; border-radius: 4px; }
+        .yd-storage-nums { font-size: 12px; }
+        .yd-storage-nums b { font-weight: 700; }
+        .yd-storage-mine { font-size: 11px; color: var(--yd-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* ── Logout link ── */
+        /* ── User chip / logout ── */
+        .yd-userbox { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--yd-border); flex-shrink: 0; }
+        .yd-user-avatar {
+            width: 34px; height: 34px; border-radius: 50%; background: var(--c-primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; color: #3D3000; flex-shrink: 0;
+        }
+        .yd-user-meta { flex: 1; min-width: 0; line-height: 1.25; }
+        .yd-user-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .yd-user-role { font-size: 11px; color: var(--yd-muted); }
         .yd-logout {
-            display: flex; align-items: center; gap: 8px;
-            padding: 10px 12px; border-top: 1px solid var(--yd-border);
-            color: var(--yd-muted); text-decoration: none; font-size: 13px;
-            transition: background .15s; flex-shrink: 0;
+            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--yd-muted); text-decoration: none; font-size: 17px; transition: background .15s;
         }
         .yd-logout:hover { background: var(--yd-hover); color: var(--yd-text); }
 
         /* ── Main area ── */
-        .yd-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+        .yd-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--yd-bg); min-width: 0; }
         .yd-main-head {
-            height: 52px; display: flex; align-items: center;
-            padding: 0 24px; border-bottom: 1px solid var(--yd-border);
-            gap: 12px; flex-shrink: 0; transition: background .2s;
+            min-height: 64px; display: flex; align-items: center;
+            padding: 8px 24px; background: #fff; border-bottom: 1px solid var(--yd-border);
+            gap: 12px; flex-shrink: 0; transition: background .2s; position: relative; z-index: 20;
         }
-        .yd-main-head.selected { background: #1C1B20; }
-        .yd-main-title { font-size: 20px; font-weight: 600; flex: 1; }
+        .yd-main-head.selected { background: var(--c-primary); border-bottom-color: var(--c-primary-dark); }
+        .yd-main-title { font-size: 21px; font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         /* ── Selection bar ── */
-        .sel-info { display: flex; align-items: center; gap: 10px; flex: 1; }
-        .sel-icon { color: rgba(255,255,255,.5); font-size: 16px; }
-        .sel-name { font-size: 15px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
-        .sel-actions { display: flex; align-items: center; gap: 4px; }
+        .sel-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .sel-icon { color: #6B5300; font-size: 16px; }
+        .sel-name { font-size: 15px; font-weight: 700; color: #24221D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sel-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
         .sel-btn {
             display: flex; align-items: center; gap: 6px;
-            background: none; border: none; border-radius: 8px;
-            padding: 6px 12px; font-size: 13px; color: rgba(255,255,255,.8);
+            background: rgba(255,255,255,.55); border: none; border-radius: 9px;
+            padding: 7px 12px; font-size: 13px; font-weight: 600; color: #24221D;
             cursor: pointer; transition: background .15s; text-decoration: none; white-space: nowrap;
         }
-        .sel-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
-        .sel-btn.danger:hover { background: rgba(244,67,54,.25); color: #ff8a80; }
+        .sel-btn:hover { background: #fff; color: #24221D; }
+        .sel-btn.danger:hover { background: #E53935; color: #fff; }
         .sel-btn i { font-size: 14px; }
-        .sel-sep { width: 1px; height: 20px; background: rgba(255,255,255,.15); margin: 0 4px; }
-        .sel-close { width: 32px; height: 32px; border-radius: 50%; background: none; border: none; color: rgba(255,255,255,.6); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
-        .sel-close:hover { background: rgba(255,255,255,.12); color: #fff; }
+        .sel-btn.dropdown-toggle::after { display: none; }
+        .sel-sep { width: 2px; }
+        .sel-close { width: 34px; height: 34px; border-radius: 50%; background: none; border: none; color: #24221D; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .sel-close:hover { background: rgba(255,255,255,.55); }
 
         /* Dropdown menu */
-        .sel-more-menu { border-radius: 10px !important; border: 1px solid #eee !important; box-shadow: 0 4px 20px rgba(0,0,0,.12) !important; padding: 4px !important; min-width: 180px; }
-        .sel-more-menu .dropdown-item { border-radius: 6px; font-size: 14px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; color: var(--yd-text); }
-        .sel-more-menu .dropdown-item:hover { background: var(--yd-hover); }
-        .sel-more-menu .dropdown-item i { font-size: 15px; color: #666; }
+        .sel-more-menu { border-radius: 12px !important; border: 1px solid var(--yd-border) !important; box-shadow: 0 8px 28px rgba(36,34,29,.16) !important; padding: 5px !important; min-width: 200px; z-index: 2000 !important; }
+        .sel-more-menu .dropdown-item { border-radius: 8px; font-size: 14px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; color: var(--yd-text); }
+        .sel-more-menu .dropdown-item:hover, .sel-more-menu .dropdown-item:active { background: var(--yd-yellow-light); color: var(--yd-text); }
+        .sel-more-menu .dropdown-item i { font-size: 15px; color: var(--c-accent); }
 
-        .yd-sort-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1.5px solid var(--yd-border); border-radius: 8px; padding: 5px 12px; font-size: 13px; color: var(--yd-text); cursor: pointer; }
-        .yd-view-toggle { display: flex; align-items: center; border: 1.5px solid var(--yd-border); border-radius: 8px; overflow: hidden; }
-        .yd-view-btn { background: none; border: none; padding: 5px 10px; cursor: pointer; color: var(--yd-muted); font-size: 15px; }
-        .yd-view-btn.active { background: var(--yd-yellow-light); color: #a07000; }
+        .yd-view-toggle { display: flex; align-items: center; background: var(--yd-bg); border: 1px solid var(--yd-border); border-radius: 10px; padding: 3px; gap: 2px; flex-shrink: 0; }
+        .yd-view-btn { background: none; border: none; padding: 5px 11px; cursor: pointer; color: var(--yd-muted); font-size: 15px; border-radius: 8px; }
+        .yd-view-btn.active { background: var(--c-primary); color: #3D3000; }
 
         /* ── Search bar ── */
-        .yd-search-bar { height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px; border-bottom: 1px solid var(--yd-border); flex-shrink: 0; }
-        .yd-search-input { flex: 1; border: 1.5px solid var(--yd-border); border-radius: 8px; padding: 8px 14px; font-size: 14px; outline: none; transition: border-color .2s; }
-        .yd-search-input:focus { border-color: var(--yd-yellow-dark); }
+        .yd-search-bar { min-height: 60px; display: flex; align-items: center; padding: 0 16px; gap: 8px; background: #fff; border-bottom: 1px solid var(--yd-border); flex-shrink: 0; }
+        .yd-search-input { flex: 1; min-width: 0; border: 1.5px solid var(--yd-border); border-radius: 10px; padding: 9px 14px; font-size: 14px; outline: none; transition: border-color .2s, box-shadow .2s; }
+        .yd-search-input:focus { border-color: var(--c-primary); box-shadow: 0 0 0 3px rgba(255,204,0,.25); }
 
         /* ── Breadcrumb ── */
-        .yd-breadcrumb { display: flex; align-items: center; gap: 2px; padding: 8px 24px 0; font-size: 13px; color: var(--yd-muted); flex-shrink: 0; }
-        .yd-breadcrumb a { color: var(--yd-muted); text-decoration: none; }
-        .yd-breadcrumb a:hover { color: var(--yd-text); text-decoration: underline; }
-        .yd-breadcrumb .active { color: var(--yd-text); font-weight: 500; }
+        .yd-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 12px 24px 0; font-size: 13px; color: var(--yd-muted); flex-shrink: 0; }
+        .yd-breadcrumb a { color: var(--c-accent); text-decoration: none; padding: 2px 6px; border-radius: 6px; }
+        .yd-breadcrumb a:hover { background: var(--yd-yellow-light); }
+        .yd-breadcrumb .active { color: var(--yd-text); font-weight: 600; padding: 2px 6px; }
+
+        /* ── Hint strip ── */
+        .yd-hint { display: flex; align-items: center; gap: 10px; margin: 14px 24px 0; padding: 9px 14px; border-radius: 12px; background: var(--yd-yellow-light); color: #5C4700; font-size: 13px; flex-shrink: 0; }
+        .yd-hint i.bi-lightbulb { color: #E0A800; font-size: 16px; }
+        .yd-hint span { flex: 1; }
+        .yd-hint kbd { background: #fff; color: #5C4700; border: 1px solid #F0DC8C; border-radius: 5px; padding: 0 5px; font-size: 12px; }
+        .yd-hint button { background: none; border: none; color: #B08A00; font-size: 16px; cursor: pointer; }
 
         /* ── Content scroll ── */
         .yd-content { flex: 1; overflow-y: auto; padding: 16px 24px 80px; }
+        .yd-section-label { font-size: 12px; color: var(--yd-muted); margin: 4px 0 10px; font-weight: 600; letter-spacing: .6px; display: flex; align-items: center; gap: 6px; }
+
+        /* ── Cards (папки и файлы) ── */
+        .yd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 10px; }
+        .yd-folder-card, .yd-file-card {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 16px 8px 12px; border-radius: 14px; background: #fff;
+            border: 1.5px solid var(--yd-border);
+            cursor: pointer; text-decoration: none; color: var(--yd-text);
+            transition: border-color .15s, box-shadow .15s; position: relative; user-select: none; min-width: 0;
+        }
+        .yd-folder-card:hover, .yd-file-card:hover { border-color: #F5DD7A; box-shadow: 0 4px 14px rgba(36,34,29,.07); color: var(--yd-text); }
+        .yd-folder-card.selected, .yd-file-card.selected { border-color: var(--c-primary); background: #FFFBEA; box-shadow: 0 0 0 3px rgba(255,204,0,.3); }
+
+        .yd-folder-icon { position: relative; width: 72px; height: 58px; margin-bottom: 10px; flex-shrink: 0; --fc: #FFC21A; }
+        .yd-folder-icon::before { content: ''; position: absolute; top: 0; left: 0; width: 38px; height: 14px; background: #F2AE00; border-radius: 6px 6px 0 0; }
+        .yd-folder-icon::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(160deg, #FFD95A 0%, var(--fc) 70%); border-radius: 4px 10px 10px 10px; box-shadow: 0 3px 8px rgba(242,174,0,.3); }
+        .yd-folder-name, .yd-file-name { font-size: 13px; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; font-weight: 500; }
+
+        .yd-file-thumb { width: 64px; height: 72px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; overflow: hidden; flex-shrink: 0; }
+        .yd-file-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+        .yd-file-thumb .file-icon-wrap, .file-icon-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
+        .yd-meta { display: none; font-size: 12px; color: var(--yd-muted); white-space: nowrap; }
+        .yd-ext { position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; background: var(--yd-bg); color: var(--yd-muted); }
+
+        .fi-pdf   { background:#FDECEC; } .fi-pdf   i { color:#D93025; font-size:30px; }
+        .fi-img   { background:#F1ECFA; } .fi-img   i { color:#7E57C2; font-size:30px; }
+        .fi-video { background:#FFF0E0; } .fi-video i { color:#EF6C00; font-size:30px; }
+        .fi-audio { background:#E8F5E9; } .fi-audio i { color:#2E7D32; font-size:30px; }
+        .fi-code  { background:#E8F1FB; } .fi-code  i { color:#1E6FD9; font-size:30px; }
+        .fi-zip   { background:#FFF6D1; } .fi-zip   i { color:#A07800; font-size:30px; }
+        .fi-word  { background:#E8EEFB; } .fi-word  i { color:#2B579A; font-size:30px; }
+        .fi-excel { background:#E6F4EA; } .fi-excel i { color:#217346; font-size:30px; }
+        .fi-def   { background:#F4F2EB; } .fi-def   i { color:#8F8B80; font-size:30px; }
+
+        /* Список вместо сетки */
+        .list-view .yd-grid { grid-template-columns: 1fr; gap: 6px; }
+        .list-view .yd-folder-card, .list-view .yd-file-card { flex-direction: row; padding: 8px 14px; gap: 14px; }
+        .list-view .yd-folder-icon { width: 36px; height: 30px; margin: 0; }
+        .list-view .yd-folder-icon::before { width: 18px; height: 8px; }
+        .list-view .yd-folder-icon::after { height: 25px; }
+        .list-view .yd-file-thumb { width: 36px; height: 36px; margin: 0; border-radius: 8px; }
+        .list-view .yd-file-thumb i { font-size: 18px !important; }
+        .list-view .yd-folder-name, .list-view .yd-file-name { text-align: left; flex: 1; font-size: 14px; }
+        .list-view .yd-meta { display: block; }
+        .list-view .yd-ext { position: static; }
+
+        /* Empty state */
+        .yd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; gap: 14px; color: var(--yd-muted); text-align: center; }
+        .yd-empty-ico { width: 110px; height: 110px; border-radius: 32px; background: var(--yd-yellow-light); display: flex; align-items: center; justify-content: center; }
+        .yd-empty-ico i { font-size: 54px; color: #E0A800; }
+        .yd-empty h3 { font-size: 19px; font-weight: 700; color: var(--yd-text); margin: 0; }
+        .yd-empty p { font-size: 14px; margin: 0; max-width: 300px; }
 
         /* ── Alerts ── */
-        .yd-alerts { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 400px; }
-        .yd-alert { background: #fff; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.15); padding: 12px 16px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; border-left: 4px solid #ccc; animation: slideIn .2s ease; }
-        .yd-alert.success { border-color: #4CAF50; } .yd-alert.success .yd-alert-icon { color: #4CAF50; }
-        .yd-alert.danger  { border-color: #F44336; } .yd-alert.danger  .yd-alert-icon { color: #F44336; }
-        .yd-alert.warning { border-color: #FCC521; } .yd-alert.warning .yd-alert-icon { color: #FCC521; }
-        .yd-alert.info    { border-color: #2196F3; } .yd-alert.info    .yd-alert-icon { color: #2196F3; }
+        .yd-alerts { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+        .yd-alert { background: #fff; border-radius: 12px; box-shadow: 0 8px 28px rgba(36,34,29,.16); padding: 12px 16px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; border-left: 5px solid #ccc; animation: slideIn .2s ease; }
+        .yd-alert.success { border-color: #43A047; } .yd-alert.success .yd-alert-icon { color: #43A047; }
+        .yd-alert.danger  { border-color: #E53935; } .yd-alert.danger  .yd-alert-icon { color: #E53935; }
+        .yd-alert.warning { border-color: #FFB300; } .yd-alert.warning .yd-alert-icon { color: #FFB300; }
+        .yd-alert.info    { border-color: #FFCC00; } .yd-alert.info    .yd-alert-icon { color: #E0A800; }
         .yd-alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-        .yd-alert-text { flex: 1; line-height: 1.5; word-break: break-all; }
+        .yd-alert-text { flex: 1; line-height: 1.5; word-break: break-word; }
         .yd-alert-close { background: none; border: none; color: var(--yd-muted); cursor: pointer; font-size: 18px; padding: 0; line-height: 1; }
+        .pw-shown { font-family: Consolas, monospace; background: var(--yd-yellow-light); color: #5C4700; padding: 1px 6px; border-radius: 5px; user-select: all; }
         @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
         /* ── Drop overlay ── */
-        .yd-drop-overlay { display: none; position: fixed; inset: 0; background: rgba(255,219,77,.15); border: 3px dashed var(--yd-yellow-dark); z-index: 8888; pointer-events: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+        .yd-drop-overlay { display: none; position: fixed; inset: 0; background: rgba(255,204,0,.14); border: 4px dashed var(--c-primary); z-index: 8888; pointer-events: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
         .yd-drop-overlay.show { display: flex; }
-        .yd-drop-overlay i { font-size: 64px; color: var(--yd-yellow-dark); }
-        .yd-drop-overlay p { font-size: 20px; font-weight: 600; color: #a07000; }
+        .yd-drop-overlay i { font-size: 72px; color: #E0A800; }
+        .yd-drop-overlay p { font-size: 22px; font-weight: 700; color: #5C4700; }
 
-        /* ── Delete confirmation modal ── */
-        .yd-del-modal .modal-content { border-radius: 14px; border: none; box-shadow: 0 8px 40px rgba(0,0,0,.18); }
+        /* ── Modals ── */
+        .modal-content { border-radius: 16px !important; border: none !important; box-shadow: 0 16px 48px rgba(36,34,29,.2) !important; }
+        .form-control:focus { border-color: var(--c-primary) !important; box-shadow: 0 0 0 3px rgba(255,204,0,.25) !important; }
         .yd-del-modal .modal-header { border-bottom: 1px solid #eee; padding: 18px 20px 14px; }
         .yd-del-modal .modal-body { padding: 4px 20px 10px; }
         .yd-del-modal .modal-footer { border-top: 1px solid #eee; padding: 12px 20px; gap: 8px; }
-        .yd-del-title { font-size: 16px; font-weight: 600; }
+        .yd-del-title { font-size: 16px; font-weight: 700; }
         .yd-del-sub { font-size: 13px; color: #666; line-height: 1.5; margin-top: 2px; }
         .yd-del-check { display: flex; align-items: center; gap: 8px; margin-top: 14px; cursor: pointer; font-size: 13px; color: #555; }
-        .yd-del-check input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--yd-yellow-dark); }
+        .yd-del-check input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--c-primary-dark); }
+        .yd-btn-danger { background: #E53935 !important; color: #fff !important; }
+        .yd-btn-danger:hover { background: #C62828 !important; }
 
         /* ── Context menu ── */
         .yd-ctx-menu {
             position: fixed; z-index: 10000; display: none;
-            background: #fff; border-radius: 12px;
-            border: 1px solid rgba(0,0,0,.08);
-            box-shadow: 0 6px 28px rgba(0,0,0,.16); padding: 5px;
-            min-width: 210px; user-select: none;
+            background: #fff; border-radius: 14px;
+            border: 1px solid var(--yd-border);
+            box-shadow: 0 10px 32px rgba(36,34,29,.18); padding: 6px;
+            min-width: 220px; user-select: none;
         }
         .yd-ctx-menu.show { display: block; }
         .yd-ctx-item {
             display: flex; align-items: center; gap: 10px;
-            padding: 7px 10px; border-radius: 8px; cursor: pointer;
-            font-size: 14px; color: var(--yd-text); white-space: nowrap;
-            transition: background .1s;
+            padding: 6px 10px; border-radius: 9px; cursor: pointer;
+            font-size: 14px; color: var(--yd-text); white-space: nowrap; transition: background .1s;
         }
-        .yd-ctx-item:hover { background: var(--yd-hover); }
-        .yd-ctx-item.danger { color: #E53935; }
-        .yd-ctx-item.danger:hover { background: #FFEBEE; }
+        .yd-ctx-item:hover { background: var(--yd-yellow-light); }
+        .yd-ctx-item.danger { color: #D32F2F; }
+        .yd-ctx-item.danger:hover { background: #FDECEC; }
         .yd-ctx-item.disabled { color: #bbb; cursor: default; pointer-events: none; }
         .yd-ctx-icon {
             width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center; font-size: 15px;
+            background: #F4F2EB !important; color: #6B675C !important;
         }
+        .yd-ctx-item.danger .yd-ctx-icon { background: #FDECEC !important; color: #D32F2F !important; }
         .yd-ctx-sep { height: 1px; background: #eee; margin: 4px 0; }
 
         /* ── Upload progress panel ── */
-        .yd-up-panel { position:fixed; bottom:20px; right:20px; z-index:9990; width:340px; background:#fff; border-radius:12px; box-shadow:0 4px 28px rgba(0,0,0,.22); overflow:hidden; display:none; flex-direction:column; }
+        .yd-up-panel { position:fixed; bottom:20px; right:20px; z-index:9990; width:min(340px, calc(100vw - 40px)); background:#fff; border-radius:14px; box-shadow:0 8px 32px rgba(36,34,29,.22); overflow:hidden; display:none; flex-direction:column; }
         .yd-up-panel.show { display:flex; }
         .yd-up-panel.minimized .yd-up-body { display:none; }
-        .yd-up-hd { background:#1976D2; color:#fff; display:flex; align-items:center; padding:11px 14px; gap:8px; cursor:default; }
-        .yd-up-hd-title { flex:1; font-size:14px; font-weight:600; }
-        .yd-up-hd-btn { background:none; border:none; color:rgba(255,255,255,.85); cursor:pointer; font-size:12px; padding:4px 8px; border-radius:6px; line-height:1; white-space:nowrap; }
-        .yd-up-hd-btn:hover { background:rgba(255,255,255,.18); color:#fff; }
+        .yd-up-hd { background:var(--c-primary); color:#24221D; display:flex; align-items:center; padding:11px 14px; gap:8px; cursor:default; }
+        .yd-up-hd-title { flex:1; font-size:14px; font-weight:700; }
+        .yd-up-hd-btn { background:none; border:none; color:#24221D; cursor:pointer; font-size:12px; padding:4px 8px; border-radius:6px; line-height:1; white-space:nowrap; }
+        .yd-up-hd-btn:hover { background:rgba(255,255,255,.5); }
         .yd-up-body { padding:6px 8px; max-height:250px; overflow-y:auto; }
         .yd-up-row { display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; }
-        .yd-up-row-ico { width:34px; height:34px; border-radius:6px; background:#FFF9DB; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .yd-up-row-ico i { color:#FFD740; font-size:18px; }
+        .yd-up-row-ico { width:34px; height:34px; border-radius:8px; background:var(--yd-yellow-light); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .yd-up-row-ico i { color:#E0A800; font-size:18px; }
         .yd-up-row-info { flex:1; min-width:0; }
         .yd-up-row-name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .yd-up-row-meta { font-size:11px; color:#999; margin-top:2px; }
         .yd-up-row-bar { width:72px; flex-shrink:0; }
-        .yd-up-bar-bg  { background:#E3F2FD; border-radius:3px; height:4px; }
-        .yd-up-bar-fill{ background:#1976D2; border-radius:3px; height:4px; width:0; transition:width .2s; }
+        .yd-up-bar-bg  { background:#F4F2EB; border-radius:3px; height:5px; }
+        .yd-up-bar-fill{ background:var(--c-primary); border-radius:3px; height:5px; width:0; transition:width .2s; }
 
         /* ── Copy picker modal ── */
-        .yd-copy-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; cursor:pointer; font-size:14px; color:var(--yd-text); transition:background .12s; }
+        .yd-copy-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:9px; cursor:pointer; font-size:14px; color:var(--yd-text); transition:background .12s; }
         .yd-copy-row:hover { background:var(--yd-hover); }
-        .yd-copy-row.sel { background:#FFF9DB; outline:1.5px solid #FCC521; }
+        .yd-copy-row.sel { background:var(--yd-yellow-light); outline:1.5px solid var(--c-primary); }
         .yd-copy-row.dim { opacity:.4; pointer-events:none; }
         .yd-copy-bc { padding:6px 20px 0; font-size:12px; color:#999; display:flex; align-items:center; gap:2px; flex-wrap:wrap; min-height:22px; }
         .yd-copy-bc a { color:#999; text-decoration:none; }
         .yd-copy-bc a:last-child { color:var(--yd-text); font-weight:500; }
         .yd-copy-bc a:hover { text-decoration:underline; }
+
+        /* ── Телефон: меню выезжает слева ── */
+        .yd-mobile-bar { display: none; }
+        .yd-backdrop { display: none; }
+        @media (max-width: 768px) {
+            .yd-sidebar { position: fixed; top: 0; bottom: 0; left: 0; transform: translateX(-100%); transition: transform .22s ease; box-shadow: 8px 0 32px rgba(0,0,0,.18); }
+            .yd-sidebar.open { transform: none; }
+            .yd-backdrop.show { display: block; position: fixed; inset: 0; background: rgba(36,34,29,.35); z-index: 1040; }
+            .yd-mobile-bar { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 12px; background: #fff; border-bottom: 1px solid var(--yd-border); flex-shrink: 0; }
+            .yd-mobile-bar .title { flex: 1; font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .yd-mobile-bar .title i { color: #E0A800; }
+            .yd-mobile-bar button { background: var(--yd-yellow-light); border: none; color: #3D3000; border-radius: 10px; width: 38px; height: 38px; font-size: 19px; display: flex; align-items: center; justify-content: center; }
+            .yd-mobile-bar button:last-child { background: var(--c-primary); }
+            .yd-main-head { padding: 8px 12px; min-height: 56px; flex-wrap: wrap; }
+            .yd-main-title { font-size: 18px; }
+            .sel-name { max-width: 100%; }
+            .yd-content { padding: 12px 12px 80px; }
+            .yd-breadcrumb { padding: 10px 12px 0; }
+            #hint { display: none !important; }
+            .yd-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+            .sel-btn .lbl { display: none; }
+        }
 
         {% block extra_styles %}{% endblock %}
     </style>
@@ -277,69 +366,118 @@
 
 <div class="yd-shell">
     {% if current_user.is_authenticated %}
-    <div class="yd-sidebar">
+    <div class="yd-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+    <div class="yd-sidebar" id="sidebar">
         <div class="yd-sidebar-head">
-            <div class="yd-logo-badge">
-                <svg viewBox="0 0 18 18" fill="none"><path d="M10.4 2H8.2C6.6 2 5.5 3.1 5.5 5.02 5.5 6.68 6.2 7.5 7.4 8.3l.9.56L5.1 14h2.1l2.8-5.4-1-.65C7.9 7.18 7.3 6.6 7.3 5.2c0-.9.6-1.4 1.56-1.4h1.54V2Z" fill="#fff"/><path d="M10.4 2H12V14h-2V3.8h.4V2Z" fill="#fff"/></svg>
-            </div>
-            <span class="yd-sidebar-title">Диск</span>
-            <div class="yd-user-avatar" title="{{ current_user.username }}">
-                {{ current_user.username[0].upper() }}
-            </div>
+            <div class="yd-logo-badge"><i class="bi bi-cloud-fill"></i></div>
+            <span class="yd-sidebar-title">{{ disk_name }}</span>
+            <button type="button" class="yd-search-trigger" title="Поиск" onclick="toggleSearch(event)">
+                <i class="bi bi-search"></i>
+            </button>
         </div>
         <div class="yd-sidebar-actions">
             <button class="yd-btn-upload" id="sidebarUploadBtn">
-                <i class="bi bi-cloud-upload"></i> Загрузить
+                <i class="bi bi-cloud-arrow-up-fill"></i> Загрузить файлы
             </button>
             <button class="yd-btn-create" data-bs-toggle="modal" data-bs-target="#mkdirModal">
-                <i class="bi bi-plus-lg"></i> Создать папку
+                <i class="bi bi-folder-plus"></i> Новая папка
             </button>
         </div>
         <nav class="yd-nav">
+            <div class="yd-nav-label">Разделы</div>
             <a class="yd-nav-item {% if request.endpoint == 'files.list_files' %}active{% endif %}"
                href="{{ url_for('files.list_files') }}">
-                <i class="bi bi-folder2"></i> Файлы
+                <span class="yd-nav-ico"><i class="bi bi-folder2-open"></i></span> Мои файлы
             </a>
-            <a class="yd-nav-item {% if request.endpoint == 'files.search' %}active{% endif %}"
-               href="#" onclick="toggleSearch(event)">
-                <i class="bi bi-search"></i> Поиск
+            <a class="yd-nav-item {% if request.endpoint == 'files.albums' or request.endpoint == 'files.album_view' %}active{% endif %}"
+               href="{{ url_for('files.albums') }}">
+                <span class="yd-nav-ico"><i class="bi bi-images"></i></span> Альбомы
+            </a>
+            <a class="yd-nav-item {% if request.endpoint == 'files.history' %}active{% endif %}"
+               href="{{ url_for('files.history') }}">
+                <span class="yd-nav-ico"><i class="bi bi-clock-history"></i></span> История
+            </a>
+            <a class="yd-nav-item {% if request.endpoint == 'files.shares' %}active{% endif %}"
+               href="{{ url_for('files.shares') }}">
+                <span class="yd-nav-ico"><i class="bi bi-link-45deg"></i></span> Публичные ссылки
             </a>
             <a class="yd-nav-item {% if request.endpoint == 'files.trash' %}active{% endif %}"
                href="{{ url_for('files.trash') }}">
-                <i class="bi bi-trash3"></i> Корзина
+                <span class="yd-nav-ico"><i class="bi bi-trash3"></i></span> Корзина
+            </a>
+            {% if current_user.is_admin %}
+            <div class="yd-nav-label">Управление</div>
+            <a class="yd-nav-item {% if request.endpoint and request.endpoint.startswith('admin.') %}active{% endif %}"
+               href="{{ url_for('admin.users') }}">
+                <span class="yd-nav-ico"><i class="bi bi-people-fill"></i></span> Пользователи
+            </a>
+            <a class="yd-nav-item {% if request.endpoint == 'admin.storage' %}active{% endif %}"
+               href="{{ url_for('admin.storage') }}">
+                <span class="yd-nav-ico"><i class="bi bi-hdd-fill"></i></span> Хранилище
+            </a>
+            <button type="button" class="yd-nav-item" onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('resetSetupModal')).show()">
+                <span class="yd-nav-ico"><i class="bi bi-arrow-counterclockwise"></i></span> Настроить заново
+            </button>
+            {% endif %}
+            <div class="yd-nav-label">Справка</div>
+            <a class="yd-nav-item {% if request.endpoint == 'help' %}active{% endif %}"
+               href="{{ url_for('help') }}">
+                <span class="yd-nav-ico"><i class="bi bi-question-lg"></i></span> Помощь
             </a>
         </nav>
 
-        <!-- Disk space -->
+        <!-- Место на диске -->
         <div class="yd-storage">
             {% if disk_total > 0 %}
             {% set free_gb = (disk_free / 1073741824) | round(1) %}
             {% set total_gb = (disk_total / 1073741824) | round(0) | int %}
             {% set used_pct = [((1 - disk_free / disk_total) * 100) | round(1), 100] | min %}
-            <div class="yd-storage-label">Место на диске</div>
+            <div class="yd-storage-label"><i class="bi bi-hdd-fill"></i> Место на диске</div>
             <div class="yd-storage-bar">
                 <div class="yd-storage-fill" style="width:{{ used_pct }}%;"></div>
             </div>
             <div class="yd-storage-nums">
                 Свободно <b>{{ free_gb }} ГБ</b> из {{ total_gb }} ГБ
             </div>
+            {% if current_user.is_admin %}<div class="yd-storage-mine" title="{{ storage_where }}"><i class="bi bi-folder2"></i> {{ storage_where }}</div>{% endif %}
             {% endif %}
         </div>
 
-        <a href="{{ url_for('auth.logout') }}" class="yd-logout">
-            <i class="bi bi-box-arrow-right"></i> Выйти
-        </a>
+        <div class="yd-userbox">
+            <div class="yd-user-avatar">{{ current_user.username[0].upper() }}</div>
+            <div class="yd-user-meta">
+                <div class="yd-user-name">{{ current_user.username }}</div>
+                <div class="yd-user-role">{{ 'Администратор' if current_user.is_admin else 'Пользователь' }}</div>
+            </div>
+            <a href="{{ url_for('auth.logout') }}" class="yd-logout" title="Выйти"><i class="bi bi-box-arrow-right"></i></a>
+        </div>
     </div>
     {% endif %}
 
     <div class="yd-main">
+        {% if current_user.is_authenticated %}
+        <div class="yd-mobile-bar">
+            <button onclick="toggleSidebar(true)" title="Меню"><i class="bi bi-list"></i></button>
+            <span class="title"><i class="bi bi-cloud-fill me-1"></i> {{ disk_name }}</span>
+            <button onclick="document.getElementById('globalFileInput').click()" title="Загрузить"><i class="bi bi-cloud-arrow-up-fill"></i></button>
+        </div>
+        {% endif %}
+        {% if current_user.is_authenticated and request.endpoint == 'files.list_files' %}
+        <div class="yd-search-bar" id="searchBar">
+            <form action="{{ url_for('files.search') }}" method="GET" style="display:flex;flex:1;gap:8px;">
+                <input type="text" name="q" class="yd-search-input" placeholder="Поиск файлов и папок...">
+                <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;flex-shrink:0;">Найти</button>
+            </form>
+            <button type="button" onclick="toggleSearch(event)" style="background:none;border:none;color:var(--yd-muted);cursor:pointer;font-size:18px;padding:4px 8px;"><i class="bi bi-x-lg"></i></button>
+        </div>
+        {% endif %}
         {% block main %}{% endblock %}
     </div>
 </div>
 
 <!-- Hidden upload form -->
 {% if current_user.is_authenticated %}
-<form method="POST" action="{{ url_for('files.upload_file', path=request.args.get('path', '/')) }}"
+<form method="POST" action="{% block upload_action %}{{ url_for('files.upload_file', path=request.args.get('path', '/')) }}{% endblock %}"
       enctype="multipart/form-data" id="globalUploadForm" style="display:none;">
     <input type="file" id="globalFileInput" name="file" multiple>
 </form>
@@ -347,7 +485,7 @@
 <!-- Mkdir modal -->
 <div class="modal fade" id="mkdirModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
-    <form method="POST" action="{{ url_for('files.mkdir', path=request.args.get('path', '/')) }}">
+    <form method="POST" action="{% block mkdir_action %}{{ url_for('files.mkdir', path=request.args.get('path', '/')) }}{% endblock %}">
       <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 8px 32px rgba(0,0,0,.18);">
         <div class="modal-header" style="border-bottom:1px solid #eee;padding:16px 20px;">
           <h5 class="modal-title" style="font-size:16px;font-weight:600;">Новая папка</h5>
@@ -418,7 +556,7 @@
         <div id="moveFolderList" style="display:flex;flex-direction:column;gap:2px;"></div>
       </div>
       <div class="modal-footer" style="border-top:1px solid #eee;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
-        <button type="button" onclick="_pickerMkdir('move')" style="background:none;border:none;color:#1976D2;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;"><i class="bi bi-plus-lg"></i> Новая папка</button>
+        <button type="button" onclick="_pickerMkdir('move')" style="background:none;border:none;color:#E0A800;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;"><i class="bi bi-plus-lg"></i> Новая папка</button>
         <div style="display:flex;gap:8px;">
           <button type="button" class="yd-btn-create" style="width:auto;padding:7px 16px;" data-bs-dismiss="modal">Отмена</button>
           <button type="button" class="yd-btn-upload" style="width:auto;padding:7px 18px;" id="moveConfirmBtn" disabled>
@@ -445,7 +583,7 @@
         <div id="copyFolderList" style="display:flex;flex-direction:column;gap:2px;"></div>
       </div>
       <div class="modal-footer" style="border-top:1px solid #eee;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
-        <button type="button" onclick="_pickerMkdir('copy')" style="background:none;border:none;color:#1976D2;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;"><i class="bi bi-plus-lg"></i> Новая папка</button>
+        <button type="button" onclick="_pickerMkdir('copy')" style="background:none;border:none;color:#E0A800;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;padding:0;"><i class="bi bi-plus-lg"></i> Новая папка</button>
         <div style="display:flex;gap:8px;">
           <button type="button" class="yd-btn-create" style="width:auto;padding:7px 16px;" data-bs-dismiss="modal">Отмена</button>
           <button type="button" class="yd-btn-upload" style="width:auto;padding:7px 18px;" id="copyConfirmBtn" disabled>
@@ -465,6 +603,18 @@
 </form>
 {% endif %}
 
+{% if current_user.is_authenticated %}
+<div class="modal fade" id="shareModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.share_file') }}" id="shareForm">
+    <input type="hidden" name="path" id="sharePath">
+    <div class="modal-content"><div class="modal-header"><h5 class="modal-title">Поделиться</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><label class="form-label">Срок действия ссылки</label><select class="form-select" name="expires_days"><option value="1">1 день</option><option value="7" selected>7 дней</option><option value="30">30 дней</option><option value="0">Бессрочно</option>
+    </select><label class="d-flex align-items-center gap-2 mt-3"><input type="checkbox" name="allow_download" value="1" checked> Разрешить скачивание</label><div class="form-text">Для файла ссылка откроет просмотр, а для папки — список её содержимого. При разрешении скачивания папку можно скачать ZIP-архивом.</div></div>
+    <div class="modal-footer"><button type="button" class="yd-btn-create" data-bs-dismiss="modal">Отмена</button><button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 16px">Создать ссылку</button></div></div>
+  </form></div>
+</div>
+{% endif %}
+
 <!-- Delete confirmation modal (global) -->
 <div class="modal fade yd-del-modal" id="deleteConfirmModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
@@ -474,14 +624,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p class="yd-del-sub">В корзине файлы и папки будут 30 дней, потом удалятся навсегда</p>
+        <p class="yd-del-sub">Удалённое попадёт в корзину — оттуда его можно вернуть, пока корзину не очистили</p>
         <label class="yd-del-check">
           <input type="checkbox" id="deleteSkipCheck"> Больше не спрашивать
         </label>
       </div>
       <div class="modal-footer">
         <button type="button" class="yd-btn-create" style="width:auto;padding:8px 20px;" data-bs-dismiss="modal">Отменить</button>
-        <button type="button" class="yd-btn-upload"  style="width:auto;padding:8px 20px;" id="deleteConfirmBtn">Удалить</button>
+        <button type="button" class="yd-btn-upload yd-btn-danger" style="width:auto;padding:8px 20px;" id="deleteConfirmBtn">Удалить</button>
       </div>
     </div>
   </div>
@@ -518,8 +668,28 @@
 <script>
 // Auto-dismiss alerts
 document.querySelectorAll('.yd-alert').forEach(el => {
-    setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; }, 5000);
-    setTimeout(() => el.remove(), 5300);
+    setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; }, 8000);
+    setTimeout(() => el.remove(), 8300);
+});
+
+// Мобильное меню
+function toggleSidebar(open) {
+    const sb = document.getElementById('sidebar'), bd = document.getElementById('sidebarBackdrop');
+    if (!sb) return;
+    sb.classList.toggle('open', open); bd.classList.toggle('show', open);
+}
+
+// Вид: сетка / список (запоминается в браузере)
+function setView(mode) {
+    try { localStorage.setItem('disk_view', mode); } catch (e) {}
+    const c = document.getElementById('mainContent');
+    if (c) c.classList.toggle('list-view', mode === 'list');
+    document.querySelectorAll('.yd-view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === mode));
+}
+document.addEventListener('DOMContentLoaded', () => {
+    let mode = 'grid';
+    try { mode = localStorage.getItem('disk_view') || 'grid'; } catch (e) {}
+    setView(mode);
 });
 
 // Search toggle
@@ -527,7 +697,8 @@ function toggleSearch(e) {
     e.preventDefault();
     const bar = document.getElementById('searchBar');
     if (!bar) { window.location = '{{ url_for("files.list_files") }}'; return; }
-    bar.style.display = bar.style.display === 'none' ? 'flex' : 'none';
+    toggleSidebar(false);
+    bar.style.display = getComputedStyle(bar).display === 'none' ? 'flex' : 'none';
     if (bar.style.display === 'flex') bar.querySelector('input').focus();
 }
 
@@ -551,7 +722,7 @@ function startXHRUpload(files) {
     const title   = document.getElementById('uploadPanelTitle');
     const hd      = panel.querySelector('.yd-up-hd');
     body.innerHTML = '';
-    hd.style.background = '#1976D2';
+    hd.style.background = '';
     panel.classList.add('show');
     panel.classList.remove('minimized');
 
@@ -716,7 +887,7 @@ let _copyBrowsePath   = '/';
 function _buildBreadcrumb(bcEl, browsePath, onCrumbClick) {
     bcEl.innerHTML = '';
     const parts = browsePath === '/' ? [] : browsePath.slice(1,-1).split('/');
-    const crumbs = [{name:'Файлы', path:'/'}];
+    const crumbs = [{name:'Мои файлы', path:'/'}];
     let p = '/';
     parts.forEach(pt => { p += pt + '/'; crumbs.push({name:pt, path:p}); });
     crumbs.forEach((cr, i) => {
@@ -743,7 +914,8 @@ function _renderPickerList(listEl, folders, browsePath, skipPath, selectedPath, 
         const sel    = f.path === selectedPath;
         const row = document.createElement('div');
         row.className = 'yd-copy-row' + (dimmed?' dim':'') + (sel?' sel':'');
-        row.innerHTML = `<i class="bi bi-folder-fill" style="color:#FFD740;font-size:20px;flex-shrink:0;margin-right:2px;"></i><span style="flex:1;">${f.name}</span><i class="bi bi-chevron-right" data-nav="1" style="color:#ccc;font-size:12px;padding:6px;margin:-6px;"></i>`;
+        row.innerHTML = `<i class="bi bi-folder-fill" style="color:#FFC21A;font-size:20px;flex-shrink:0;margin-right:2px;"></i><span style="flex:1;"></span><i class="bi bi-chevron-right" data-nav="1" style="color:#ccc;font-size:12px;padding:6px;margin:-6px;"></i>`;
+        row.querySelector('span').textContent = f.name;
         row.addEventListener('click', e => {
             if (e.target.closest('[data-nav]')) { onNavigate(f.path); return; }
             listEl.querySelectorAll('.yd-copy-row.sel').forEach(r => r.classList.remove('sel'));
@@ -765,7 +937,7 @@ function _loadCopyFolders(browsePath) {
     const bc   = document.getElementById('copyBreadcrumb');
     _buildBreadcrumb(bc, browsePath, p => _loadCopyFolders(p));
     list.innerHTML = '<div style="color:#999;padding:16px;text-align:center;font-size:13px;"><div class="spinner-border spinner-border-sm"></div></div>';
-    fetch(FOLDERS_URL).then(r=>r.json()).then(folders =>
+    fetch(FOLDERS_URL + '?path=' + encodeURIComponent(browsePath)).then(r=>r.json()).then(folders =>
         _renderPickerList(list, folders, browsePath, null, _copySelectedPath,
             p => { _copySelectedPath=p; if (btn) btn.disabled=false; },
             p => _loadCopyFolders(p))
@@ -791,7 +963,7 @@ function _loadMoveFoldersPicker(browsePath) {
     const bc   = document.getElementById('moveBreadcrumb');
     _buildBreadcrumb(bc, browsePath, p => _loadMoveFoldersPicker(p));
     list.innerHTML = '<div style="color:#999;padding:16px;text-align:center;font-size:13px;"><div class="spinner-border spinner-border-sm"></div></div>';
-    fetch(FOLDERS_URL).then(r=>r.json()).then(folders =>
+    fetch(FOLDERS_URL + '?path=' + encodeURIComponent(browsePath)).then(r=>r.json()).then(folders =>
         _renderPickerList(list, folders, browsePath, _moveSkipPath, _moveSelectedPath,
             p => { _moveSelectedPath=p; if (btn) btn.disabled=false; },
             p => _loadMoveFoldersPicker(p))
@@ -820,6 +992,15 @@ function _pickerMkdir(mode) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // В окнах с полем ввода сразу ставим курсор в поле
+    document.querySelectorAll('.modal').forEach(m => m.addEventListener('shown.bs.modal', () => {
+        const inp = m.querySelector('input[type=text]:not([readonly]), input:not([type]):not([readonly]), input.adm-input');
+        if (inp) { inp.focus(); inp.select(); }
+    }));
+    document.getElementById('mkdirModal')?.addEventListener('show.bs.modal', e => {
+        const inp = e.target.querySelector('input[name=folder_name]'); if (inp) inp.value = '';
+    });
+
     // Upload panel minimize toggle
     const minBtn = document.getElementById('uploadMinBtn');
     if (minBtn) minBtn.addEventListener('click', () => {
@@ -871,6 +1052,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+{% if current_user.is_admin %}
+<div class="modal fade" id="resetSetupModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2" style="color:#E0A800"></i>Настроить заново?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0">Все пользователи, альбомы, ссылки и корзина будут удалены, и диск предложит пройти первый запуск заново. <b>Сами файлы в хранилище останутся на месте.</b></p></div><div class="modal-footer"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><form method="POST" action="{{ url_for('admin.reset_setup') }}" style="margin:0"><button type="submit" class="btn btn-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Сбросить настройки</button></form></div></div></div></div></div>
+{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

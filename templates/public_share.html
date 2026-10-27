@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffcc00">
+  <title>{{ current.name if is_file else (relative.split('/')[-1] if relative else root_name) }} — Общий доступ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    :root{--yellow:#ffcc00;--text:#24221d;--muted:#898579;--border:#ece8dc;--bg:#faf9f5;--card:#fff}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px 'Segoe UI',Arial,sans-serif;min-height:100vh}
+    .top{height:66px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 max(20px,calc((100% - 1120px)/2));gap:12px;position:sticky;top:0;z-index:2}
+    .logo{width:38px;height:38px;border-radius:12px;background:var(--yellow);display:grid;place-items:center;font-size:20px;color:#493900}.brand{font-size:17px;font-weight:700}.badge{margin-left:auto;background:#fff6d1;border-radius:20px;padding:7px 11px;color:#705700;font-size:12px}
+    main{max-width:1120px;margin:32px auto;padding:0 20px}.heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}.heading h1{font-size:25px;font-weight:700;margin:0;flex:1;overflow-wrap:anywhere}.actions{display:flex;gap:8px}.btn-main{display:inline-flex;align-items:center;gap:8px;border-radius:10px;padding:9px 14px;background:var(--yellow);color:var(--text);font-weight:600;text-decoration:none;border:0}.btn-main:hover{background:#f2bc00;color:var(--text)}.btn-light{background:#fff;border:1px solid var(--border)}.crumb{margin:0 0 18px;color:var(--muted);font-size:13px}.crumb a{color:#765d00;text-decoration:none}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}.entry{min-width:0;min-height:166px;border:1px solid var(--border);border-radius:14px;background:var(--card);padding:16px;text-decoration:none;color:var(--text);display:flex;flex-direction:column;align-items:flex-start;transition:box-shadow .15s,transform .15s}.entry:hover{color:var(--text);box-shadow:0 8px 24px #24221d12;transform:translateY(-2px)}.ico{width:58px;height:58px;display:grid;place-items:center;border-radius:15px;background:#fff6d1;color:#b38a00;font-size:28px;margin-bottom:13px}.entry.file .ico{background:#eef2ff;color:#5968bd}.name{font-weight:600;overflow-wrap:anywhere}.meta{font-size:12px;color:var(--muted);margin-top:5px}.empty{background:#fff;border:1px solid var(--border);border-radius:15px;text-align:center;padding:48px 20px;color:var(--muted)}.preview{background:#fff;border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center}.preview img,.preview video,.preview iframe{max-width:100%;max-height:70vh;border:0}.preview iframe{width:100%;height:70vh}.preview pre{text-align:left;white-space:pre-wrap;overflow:auto;max-height:70vh;background:#f5f3ec;padding:18px;border-radius:10px}
+    @media(max-width:600px){main{margin:22px auto;padding:0 14px}.top{padding:0 14px}.heading h1{font-size:20px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.entry{min-height:145px;padding:13px}.badge{font-size:11px}}
+  </style>
+</head>
+<body>
+<header class="top"><div class="logo"><i class="bi bi-cloud-fill"></i></div><div class="brand">Общий доступ</div><span class="badge"><i class="bi bi-shield-lock"></i> Доступ только к выбранному {% if is_file %}файлу{% else %}каталогу{% endif %}</span></header>
+<main>
+  {% if is_file %}
+    <div class="heading"><h1><i class="bi bi-file-earmark me-2" style="color:#8a6a00"></i>{{ current.name }}</h1><div class="actions">{% if share.allow_download %}<a class="btn-main" href="{{ url_for('public.download_shared', token=token, path=relative) }}"><i class="bi bi-download"></i> Скачать</a>{% endif %}</div></div>
+    {% if relative %}<div class="crumb"><a href="{{ url_for('public.browse_shared', token=token) }}"><i class="bi bi-house"></i> Общая папка</a>{% if parent %}{% set ns=namespace(path='') %}{% for part in parent.split('/') %}<span class="mx-1">/</span>{% set ns.path=(ns.path ~ '/' if ns.path else '') ~ part %}<a href="{{ url_for('public.browse_shared', token=token, path=ns.path) }}">{{ part }}</a>{% endfor %}{% endif %}<span class="mx-1">/</span><b>{{ current.name }}</b></div><a class="btn-main btn-light mb-3" href="{{ url_for('public.browse_shared', token=token, path=parent) if parent else url_for('public.browse_shared', token=token) }}"><i class="bi bi-arrow-left"></i> Назад к папке</a>{% endif %}
+    {% set ext=current.name.rsplit('.',1)[-1].lower() if '.' in current.name else '' %}
+    <section class="preview">
+      {% if ext in ['jpg','jpeg','png','gif','webp','bmp','svg'] %}<img src="{{ url_for('public.view_shared', token=token, path=relative) }}" alt="{{ current.name }}">
+      {% elif ext == 'pdf' %}<iframe src="{{ url_for('public.view_shared', token=token, path=relative) }}"></iframe>
+      {% elif ext in ['mp4','webm','ogg','mov'] %}<video controls src="{{ url_for('public.view_shared', token=token, path=relative) }}"></video>
+      {% elif ext in ['mp3','wav','flac','aac','m4a'] %}<audio controls src="{{ url_for('public.view_shared', token=token, path=relative) }}"></audio>
+      {% elif ext in ['txt','md','log','csv','json','xml','yaml','yml','ini','toml','py','js','ts','css','html','htm','sh','rs','go','java','c','cpp','h'] %}<pre id="textPreview">Загрузка предпросмотра…</pre>
+      {% else %}<div class="empty"><i class="bi bi-file-earmark" style="font-size:42px"></i><p class="mt-3 mb-0">Для этого типа файла предпросмотр недоступен.</p></div>{% endif %}
+    </section>
+  {% else %}
+    <div class="heading"><h1><i class="bi bi-folder-fill me-2" style="color:#e0a800"></i>{{ relative.split('/')[-1] if relative else root_name }}</h1><div class="actions">{% if share.allow_download %}<a class="btn-main" href="{{ url_for('public.download_shared', token=token, path=relative) }}"><i class="bi bi-download"></i> Скачать папку</a>{% endif %}</div></div>
+    {% if relative %}<div class="crumb"><a href="{{ url_for('public.browse_shared', token=token) }}"><i class="bi bi-house"></i> Общая папка</a>{% set ns=namespace(path='') %}{% for part in relative.split('/') %}<span class="mx-1">/</span>{% set ns.path=(ns.path ~ '/' if ns.path else '') ~ part %}{% if loop.last %}<b>{{ part }}</b>{% else %}<a href="{{ url_for('public.browse_shared', token=token, path=ns.path) }}">{{ part }}</a>{% endif %}{% endfor %}</div>{% endif %}
+    {% if relative %}<a class="btn-main btn-light mb-3" href="{{ url_for('public.browse_shared', token=token, path=parent) if parent else url_for('public.browse_shared', token=token) }}"><i class="bi bi-arrow-up"></i> На уровень выше</a>{% endif %}
+    {% if items %}<div class="grid">{% for item in items %}{% set child=(relative ~ '/' if relative else '') ~ item.name %}{% if item.is_directory %}<a class="entry" href="{{ url_for('public.browse_shared', token=token, path=child) }}"><span class="ico"><i class="bi bi-folder-fill"></i></span><span class="name">{{ item.name }}</span><span class="meta">Папка</span></a>{% else %}<a class="entry file" href="{{ url_for('public.browse_shared', token=token, path=child) }}"><span class="ico"><i class="bi bi-file-earmark"></i></span><span class="name">{{ item.name }}</span><span class="meta">{{ item.size|filesize }}</span></a>{% endif %}{% endfor %}</div>{% else %}<div class="empty"><i class="bi bi-folder2-open" style="font-size:42px"></i><p class="mt-3 mb-0">В этой папке пока нет файлов.</p></div>{% endif %}
+  {% endif %}
+</main>
+{% if is_file and ext in ['txt','md','log','csv','json','xml','yaml','yml','ini','toml','py','js','ts','css','html','htm','sh','rs','go','java','c','cpp','h'] %}<script>fetch({{ url_for('public.view_shared', token=token, path=relative)|tojson }}).then(r=>{if(!r.ok)throw new Error();return r.text()}).then(t=>document.getElementById('textPreview').textContent=t.length>60000?t.slice(0,60000)+'\n\n[обрезано]':t).catch(()=>document.getElementById('textPreview').textContent='Не удалось загрузить предпросмотр');</script>{% endif %}
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#ffcc00">
+  <title>{{ title }} — Общий доступ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    :root{--yellow:#ffcc00;--text:#24221d;--muted:#898579;--border:#ece8dc;--bg:#faf9f5}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;
+         background:var(--bg);color:var(--text);font:14px 'Segoe UI',Arial,sans-serif}
+    body::before{content:'';position:fixed;top:0;left:0;right:0;height:6px;background:var(--yellow)}
+    .card{background:#fff;border:1px solid var(--border);border-radius:22px;box-shadow:0 16px 48px #24221d0f;
+          padding:40px 32px 34px;width:100%;max-width:420px;text-align:center}
+    .logo{width:72px;height:72px;margin:0 auto 18px;border-radius:22px;background:var(--yellow);
+          display:flex;align-items:center;justify-content:center;color:#493900;font-size:34px}
+    h1{font-size:21px;font-weight:800;margin:0 0 8px}
+    p{color:var(--muted);line-height:1.55;margin:0}
+    .hint{margin-top:20px;padding:12px 14px;border-radius:12px;background:#fff6d1;color:#705700;font-size:13px;text-align:left}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><i class="bi bi-{{ icon }}"></i></div>
+    <h1>{{ title }}</h1>
+    <p>{{ text }}</p>
+    {% if hint %}<div class="hint"><i class="bi bi-info-circle"></i> {{ hint }}</div>{% endif %}
+  </div>
+</body>
+</html>

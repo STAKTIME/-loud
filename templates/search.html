@@ -1,34 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Поиск: {{ q }} — Диск{% endblock %}
+{% block title %}Поиск: {{ q }} — {{ disk_name }}{% endblock %}
 
 {% block extra_styles %}
-.yd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; }
-.yd-folder-card { display: flex; flex-direction: column; align-items: center; padding: 16px 8px 12px; border-radius: 10px; cursor: pointer; text-decoration: none; color: var(--yd-text); transition: background .15s; }
-.yd-folder-card:hover { background: var(--yd-hover); color: var(--yd-text); }
-.yd-folder-icon { position: relative; width: 72px; height: 58px; margin-bottom: 8px; flex-shrink: 0; }
-.yd-folder-icon::before { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(160deg, #FFD740 60%, #FFCA28 100%); border-radius: 4px 10px 10px 10px; box-shadow: 0 2px 6px rgba(255,180,0,.25); }
-.yd-folder-icon::after { content: ''; position: absolute; top: 0; left: 0; width: 38px; height: 12px; background: #FFD740; border-radius: 6px 6px 0 0; }
-.yd-folder-name { font-size: 13px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.yd-file-card { display: flex; flex-direction: column; align-items: center; padding: 12px 8px 10px; border-radius: 10px; cursor: pointer; transition: background .15s; position: relative; }
-.yd-file-card:hover { background: var(--yd-hover); }
-.yd-file-thumb { width: 68px; height: 80px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; overflow: hidden; flex-shrink: 0; }
-.yd-file-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
-.yd-file-thumb .file-icon-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
-.yd-file-name { font-size: 12px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.fi-pdf   { background:#FFEBEE; } .fi-pdf   i { color:#E53935; font-size:30px; }
-.fi-img   { background:#F3E5F5; } .fi-img   i { color:#8E24AA; font-size:30px; }
-.fi-video { background:#FFF3E0; } .fi-video i { color:#F57C00; font-size:30px; }
-.fi-audio { background:#E8F5E9; } .fi-audio i { color:#388E3C; font-size:30px; }
-.fi-code  { background:#E3F2FD; } .fi-code  i { color:#1976D2; font-size:30px; }
-.fi-zip   { background:#F9FBE7; } .fi-zip   i { color:#827717; font-size:30px; }
-.fi-def   { background:#FAFAFA; } .fi-def   i { color:#9E9E9E; font-size:30px; }
-
-.yd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; color: var(--yd-muted); text-align: center; }
-.yd-empty i { font-size: 72px; color: #e0e0e0; }
-.yd-empty h3 { font-size: 18px; font-weight: 600; color: #bbb; margin: 0; }
-
 .yd-preview .modal-dialog { max-width: 900px; }
 .yd-preview .modal-content { border-radius: 14px; overflow: hidden; border: none; }
 .yd-preview .modal-header { background: #1c1b20; border: none; padding: 14px 20px; }
@@ -66,26 +39,27 @@
 <div class="yd-content">
 {% if not folders and not files %}
 <div class="yd-empty">
-    <i class="bi bi-search"></i>
+    <div class="yd-empty-ico"><i class="bi bi-search"></i></div>
     <h3>Ничего не найдено</h3>
     <p>По запросу «{{ q }}» ничего не найдено</p>
 </div>
 {% else %}
 {% if folders %}
-<div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;">ПАПКИ</div>
-<div class="yd-grid" style="margin-bottom:16px;">
+<div class="yd-section-label"><i class="bi bi-folder-fill" style="color:#E0A800"></i> ПАПКИ · {{ folders|length }}</div>
+<div class="yd-grid" style="margin-bottom:22px;">
     {% for item in folders %}
     <a href="{{ url_for('files.list_files', path=item.parent_path + item.name + '/') }}"
        class="yd-folder-card" title="{{ item.name }}">
-        <div class="yd-folder-icon"></div>
+        <div class="yd-folder-icon" style="--fc:{{ folder_colors[item.color % folder_colors|length] }}"></div>
         <span class="yd-folder-name">{{ item.name }}</span>
+        <span style="font-size:11px;color:var(--yd-muted);margin-top:2px;">{{ item.parent_path }}</span>
     </a>
     {% endfor %}
 </div>
 {% endif %}
 
 {% if files %}
-{% if folders %}<div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;">ФАЙЛЫ</div>{% endif %}
+<div class="yd-section-label"><i class="bi bi-file-earmark-fill" style="color:#E0A800"></i> ФАЙЛЫ · {{ files|length }}</div>
 <div class="yd-grid">
     {% for item in files %}
     {% set ext = item.name.rsplit('.', 1)[-1].lower() if '.' in item.name else '' %}
@@ -111,7 +85,7 @@
          data-name="{{ item.name }}"
          data-can-preview="{{ 'true' if can_preview else 'false' }}"
          data-ptype="{% if is_img %}img{% elif is_pdf %}pdf{% elif is_video %}video{% elif is_audio %}audio{% elif is_code %}text{% endif %}"
-         ondblclick="handleDblClick(this)"
+         onclick="handleDblClick(this)"
          title="{{ item.name }}">
         <div class="yd-file-thumb">
             {% if is_img %}
@@ -122,6 +96,7 @@
             {% endif %}
         </div>
         <span class="yd-file-name">{{ item.name }}</span>
+        <span style="font-size:11px;color:var(--yd-muted);margin-top:2px;">{{ item.parent_path }} · {{ item.size | filesize }}</span>
     </div>
     {% endfor %}
 </div>

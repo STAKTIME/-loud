@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Публичные ссылки — {{ disk_name }}{% endblock %}
+{% block main %}
+<div class="yd-main-head"><span class="yd-main-title"><i class="bi bi-link-45deg" style="color:#E0A800"></i> Публичные ссылки</span><span style="font-size:13px;color:var(--yd-muted)">{{ links|length }} шт.</span></div>
+<div class="yd-content"><div style="max-width:900px">
+{% for link in links %}
+<div class="card mb-2 border-0" style="border:1px solid var(--yd-border)!important;border-radius:14px"><div class="card-body d-flex align-items-center gap-3 flex-wrap">
+<i class="bi bi-file-earmark" style="font-size:25px;color:#E0A800"></i><div style="flex:1;min-width:220px"><div style="font-weight:600;word-break:break-all">{{ link.path }}</div><div class="text-muted small">Создана: {{ link.created_at.strftime('%d.%m.%Y %H:%M') }} · {% if link.expires_at %}до {{ link.expires_at.strftime('%d.%m.%Y %H:%M') }}{% else %}без срока{% endif %}</div><a href="{{ url_for('public.browse_shared', token=link.token, _external=True) }}" target="_blank" style="font-size:12px;word-break:break-all">{{ url_for('public.browse_shared', token=link.token, _external=True) }}</a></div>
+<form method="POST" action="{{ url_for('files.delete_share', share_id=link.id) }}" class="share-delete-form"><button type="button" class="btn btn-sm btn-outline-danger" onclick="openShareDelete(this.form, {{ link.path|tojson|forceescape }})"><i class="bi bi-x-circle"></i> Отключить</button></form>
+</div></div>
+{% else %}<div class="yd-empty"><div class="yd-empty-ico"><i class="bi bi-link-45deg"></i></div><h3>Публичных ссылок нет</h3><p>Созданные ссылки на файлы появятся здесь.</p></div>{% endfor %}
+</div></div>
+<div class="modal fade" id="shareDeleteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:400px"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-link-45deg me-2" style="color:#E0A800"></i>Отключить ссылку?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0">Ссылка перестанет работать для всех, у кого она есть.</p><div id="shareDeleteName" class="text-muted small mt-2" style="word-break:break-all"></div></div><div class="modal-footer"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-danger" onclick="document.getElementById('shareDeleteForm').submit()"><i class="bi bi-x-circle me-1"></i>Отключить ссылку</button></div></div></div></div>
+<form id="shareDeleteForm" method="POST" style="display:none"></form>
+{% block scripts %}<script>
+function openShareDelete(form, name) {
+    document.getElementById('shareDeleteForm').action = form.action;
+    document.getElementById('shareDeleteName').textContent = name;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('shareDeleteModal')).show();
+}
+</script>{% endblock %}
+{% endblock %}

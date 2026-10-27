@@ -1,13 +1,14 @@
 import shutil
-from flask import Flask
+from flask import Flask, redirect, url_for, render_template
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_login import LoginManager, login_required
 from config import Config
 
 db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
-login_manager.login_message = 'Пожалуйста, войдите для доступа к этой странице.'
+login_manager.login_message = None  # на странице входа и так всё понятно
+login_manager.login_message_category = 'info'
 
 def create_app():
     app = Flask(__name__, template_folder='../templates')
@@ -20,61 +21,95 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))
 
     from app.auth import auth_bp
     from app.files import files_bp
     from app.public import public_bp
+    from app.admin import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(files_bp, url_prefix='/files')
     app.register_blueprint(public_bp, url_prefix='/public')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
 
-    from flask import redirect, url_for
     @app.route('/')
     def index():
         return redirect(url_for('files.list_files'))
 
+    @app.route('/help')
+    @login_required
+    def help():
+        return render_template('help.html')
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('error.html', code=403, text='Этот раздел только для администратора'), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template('error.html', code=404, text='Такой страницы нет'), 404
+
+    @app.errorhandler(413)
+    def too_large(e):
+        mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+        return render_template('error.html', code=413, text=f'Файл слишком большой (предел {mb} МБ)'), 413
+
+    @app.template_filter('filesize')
+    def filesize(b):
+        b = b or 0
+        for unit in ('Б', 'КБ', 'МБ', 'ГБ'):
+            if b < 1024 or unit == 'ГБ':
+                return f'{b:.0f} {unit}' if unit == 'Б' else f'{b:.1f} {unit}'
+            b /= 1024
+
+    @app.before_request
+    def need_storage():
+        # хранилище ещё не выбрано (например, база осталась со старой версии) — сначала выбрать
+        from flask import request
+        from flask_login import current_user
+        from app.storage import storage_root
+        if (current_user.is_authenticated and request.endpoint
+                and not request.endpoint.startswith(('auth.', 'static', 'admin.storage'))
+                and not storage_root()):
+            if current_user.is_admin:
+                return redirect(url_for('admin.storage'))
+            return render_template('error.html', code=503, text='Администратор ещё не выбрал, где хранить файлы'), 503
+
     @app.context_processor
     def inject_globals():
         from flask_login import current_user
-        ctx = {}
-        # Real disk space
+        from app.storage import storage_root, user_home
+        ctx = {'disk_name': app.config['DISK_NAME'], 'folder_colors': ['#FFC21A'],
+               'disk_total': 0, 'disk_free': 0, 'storage_where': ''}
+        # Место на диске, где лежит хранилище
         try:
-            disk = shutil.disk_usage('/')
-            ctx['disk_total'] = disk.total
-            ctx['disk_free'] = disk.free
-            ctx['disk_used_sys'] = disk.used
+            if current_user.is_authenticated and storage_root():
+                home = user_home(current_user)
+                disk = shutil.disk_usage(home)
+                ctx.update(disk_total=disk.total, disk_free=disk.free, storage_where=home)
         except Exception:
-            ctx['disk_total'] = 0
-            ctx['disk_free'] = 0
-            ctx['disk_used_sys'] = 0
-
-        # User storage used (sum of all non-deleted files)
-        if current_user.is_authenticated:
-            from sqlalchemy import func
-            from app.models import FileMetadata
-            used = db.session.query(func.sum(FileMetadata.size)).filter_by(
-                user_id=current_user.id, is_directory=False, is_deleted=False
-            ).scalar() or 0
-            ctx['storage_used'] = used
-        else:
-            ctx['storage_used'] = 0
+            pass
         return ctx
 
     with app.app_context():
         db.create_all()
-        # Migrate existing databases: add new columns if missing
-        from sqlalchemy import text
-        with db.engine.connect() as conn:
-            for col, defn in [
-                ('is_deleted', 'BOOLEAN NOT NULL DEFAULT 0'),
-                ('deleted_at', 'DATETIME'),
-            ]:
-                try:
-                    conn.execute(text(f'ALTER TABLE files ADD COLUMN {col} {defn}'))
-                    conn.commit()
-                except Exception:
-                    pass
+        # SQLite не изменяет существующие таблицы через create_all().
+        # Добавляем новые необязательные поля при обновлении старой базы.
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        if 'users' in inspector.get_table_names():
+            columns = {c['name'] for c in inspector.get_columns('users')}
+            if 'quota_gb' not in columns:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE users ADD COLUMN quota_gb FLOAT'))
+            if 'full_access' not in columns:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE users ADD COLUMN full_access BOOLEAN NOT NULL DEFAULT 0'))
+        if 'shares' in inspector.get_table_names():
+            columns = {c['name'] for c in inspector.get_columns('shares')}
+            if 'allow_download' not in columns:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE shares ADD COLUMN allow_download BOOLEAN NOT NULL DEFAULT 1'))
 
     return app

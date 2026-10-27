@@ -1,57 +1,9 @@
 {% extends "base.html" %}
 {% block title %}
-    {% if current_path == '/' %}Файлы — Диск{% else %}{{ current_path.strip('/').split('/')[-1] }} — Диск{% endif %}
+    {% if current_path == '/' %}Мои файлы — {{ disk_name }}{% else %}{{ current_path.strip('/').split('/')[-1] }} — {{ disk_name }}{% endif %}
 {% endblock %}
 
 {% block extra_styles %}
-.yd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; }
-
-/* Folder card */
-.yd-folder-card {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 16px 8px 12px; border-radius: 10px;
-    cursor: pointer; text-decoration: none; color: var(--yd-text);
-    transition: background .15s; position: relative; user-select: none;
-}
-.yd-folder-card:hover { background: var(--yd-hover); color: var(--yd-text); }
-.yd-folder-card.selected { background: rgba(255,219,77,.25); outline: 2px solid var(--yd-yellow-dark); }
-
-/* CSS folder icon */
-.yd-folder-icon { position: relative; width: 72px; height: 58px; margin-bottom: 8px; flex-shrink: 0; }
-.yd-folder-icon::before { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(160deg, #FFD740 60%, #FFCA28 100%); border-radius: 4px 10px 10px 10px; box-shadow: 0 2px 6px rgba(255,180,0,.25); }
-.yd-folder-icon::after { content: ''; position: absolute; top: 0; left: 0; width: 38px; height: 12px; background: #FFD740; border-radius: 6px 6px 0 0; }
-
-.yd-folder-name { font-size: 13px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
-
-/* File card */
-.yd-file-card {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 12px 8px 10px; border-radius: 10px;
-    cursor: pointer; transition: background .15s; position: relative; user-select: none;
-}
-.yd-file-card:hover { background: var(--yd-hover); }
-.yd-file-card.selected { background: rgba(255,219,77,.25); outline: 2px solid var(--yd-yellow-dark); }
-.yd-file-thumb { width: 68px; height: 80px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; overflow: hidden; flex-shrink: 0; }
-.yd-file-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
-.yd-file-thumb .file-icon-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
-.yd-file-name { font-size: 12px; text-align: center; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yd-text); }
-
-.fi-pdf   { background:#FFEBEE; } .fi-pdf   i { color:#E53935; font-size:30px; }
-.fi-img   { background:#F3E5F5; } .fi-img   i { color:#8E24AA; font-size:30px; }
-.fi-video { background:#FFF3E0; } .fi-video i { color:#F57C00; font-size:30px; }
-.fi-audio { background:#E8F5E9; } .fi-audio i { color:#388E3C; font-size:30px; }
-.fi-code  { background:#E3F2FD; } .fi-code  i { color:#1976D2; font-size:30px; }
-.fi-zip   { background:#F9FBE7; } .fi-zip   i { color:#827717; font-size:30px; }
-.fi-word  { background:#E8EAF6; } .fi-word  i { color:#3949AB; font-size:30px; }
-.fi-excel { background:#E8F5E9; } .fi-excel i { color:#2E7D32; font-size:30px; }
-.fi-def   { background:#FAFAFA; } .fi-def   i { color:#9E9E9E; font-size:30px; }
-
-/* Empty state */
-.yd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; color: var(--yd-muted); text-align: center; }
-.yd-empty i { font-size: 72px; color: #e0e0e0; }
-.yd-empty h3 { font-size: 18px; font-weight: 600; color: #bbb; margin: 0; }
-.yd-empty p { font-size: 14px; margin: 0; max-width: 260px; }
-
 /* Preview modal */
 .yd-preview .modal-dialog { max-width: 900px; }
 .yd-preview .modal-content { border-radius: 14px; overflow: hidden; border: none; box-shadow: 0 12px 48px rgba(0,0,0,.25); }
@@ -80,38 +32,25 @@
 
 /* Drag-over highlight on folders */
 .yd-folder-card.drag-over {
-    background: rgba(255,219,77,.35) !important;
-    outline: 2px dashed var(--yd-yellow-dark) !important;
+    background: #EEF2FF !important;
+    outline: 2px dashed var(--c-primary) !important;
     transform: scale(1.04);
     transition: transform .1s;
 }
 {% endblock %}
 
 {% block main %}
-<!-- Search bar -->
-<div class="yd-search-bar" id="searchBar">
-    <form action="{{ url_for('files.search') }}" method="GET" style="display:flex;flex:1;gap:8px;">
-        <input type="text" name="q" class="yd-search-input" placeholder="Поиск файлов и папок..." autofocus>
-        <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;flex-shrink:0;">Найти</button>
-    </form>
-    <button onclick="toggleSearch(event)" style="background:none;border:none;color:var(--yd-muted);cursor:pointer;font-size:18px;padding:4px 8px;">
-        <i class="bi bi-x-lg"></i>
-    </button>
-</div>
-
 <!-- Header — normal or selection bar -->
 <div class="yd-main-head" id="mainHead">
     <!-- Normal state -->
     <div id="headNormal" style="display:flex;align-items:center;gap:12px;flex:1;">
         <span class="yd-main-title">
-            {% if current_path == '/' %}Файлы{% else %}{{ current_path.strip('/').split('/')[-1] }}{% endif %}
+            {% if current_path == '/' %}Мои файлы{% else %}{{ current_path.strip('/').split('/')[-1] }}{% endif %}
         </span>
-        <button class="yd-sort-btn">
-            <i class="bi bi-sort-alpha-down"></i> По названию
-        </button>
+        <span style="font-size:13px;color:var(--yd-muted);white-space:nowrap;">{{ items|length }} шт.</span>
         <div class="yd-view-toggle">
-            <button class="yd-view-btn active" title="Сетка"><i class="bi bi-grid-3x3-gap"></i></button>
-            <button class="yd-view-btn" title="Список"><i class="bi bi-list-ul"></i></button>
+            <button class="yd-view-btn active" data-view="grid" title="Плитка" onclick="setView('grid')"><i class="bi bi-grid-3x3-gap-fill"></i></button>
+            <button class="yd-view-btn" data-view="list" title="Список" onclick="setView('list')"><i class="bi bi-list-ul"></i></button>
         </div>
     </div>
     <!-- Selection state (hidden until item clicked) -->
@@ -132,7 +71,7 @@
 <!-- Breadcrumb -->
 {% if current_path != '/' %}
 <div class="yd-breadcrumb">
-    <a href="{{ url_for('files.list_files', path='/') }}">Файлы</a>
+    <a href="{{ url_for('files.list_files', path='/') }}"><i class="bi bi-house-door-fill"></i> Мои файлы</a>
     {% set parts = current_path.strip('/').split('/') %}
     {% set cumulative = namespace(val='/') %}
     {% for part in parts %}
@@ -147,24 +86,31 @@
 </div>
 {% endif %}
 
+<div class="yd-hint" id="hint" style="display:none;">
+    <i class="bi bi-lightbulb"></i>
+    <span><b>Подсказка:</b> нажмите на файл, чтобы выбрать его и увидеть действия сверху ·
+        двойной клик — открыть · правая кнопка мыши — меню · перетащите файлы в окно, чтобы загрузить ·
+        <kbd>Shift</kbd>+клик — выбрать несколько</span>
+    <button onclick="hideHint()" title="Скрыть"><i class="bi bi-x-lg"></i></button>
+</div>
+
 <!-- Content -->
 <div class="yd-content" id="mainContent" onclick="handleBgClick(event)">
     {% set folders = items | selectattr('is_directory') | list %}
     {% set files   = items | rejectattr('is_directory') | list %}
 
     {% if parent_path %}
-    <div style="margin-bottom:10px;">
+    <div style="margin-bottom:12px;">
         <a href="{{ url_for('files.list_files', path=parent_path) }}"
-           style="display:inline-flex;align-items:center;gap:6px;color:#999;font-size:13px;text-decoration:none;padding:4px 8px;border-radius:6px;transition:background .15s;"
-           onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+           style="display:inline-flex;align-items:center;gap:6px;color:var(--c-accent);font-size:13px;font-weight:600;text-decoration:none;padding:6px 12px;border-radius:9px;background:#fff;border:1px solid var(--yd-border);">
             <i class="bi bi-arrow-left"></i> Назад
         </a>
     </div>
     {% endif %}
 
     {% if folders %}
-    <div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;letter-spacing:.3px;">ПАПКИ</div>
-    <div class="yd-grid" style="margin-bottom:16px;">
+    <div class="yd-section-label"><i class="bi bi-folder-fill" style="color:#E0A800"></i> ПАПКИ · {{ folders|length }}</div>
+    <div class="yd-grid" style="margin-bottom:22px;">
         {% for item in folders %}
         <div class="yd-folder-card" id="item-{{ item.id }}"
              data-id="{{ item.id }}"
@@ -181,15 +127,16 @@
              ondragover="onFolderDragOver(event, this)"
              ondragleave="onFolderDragLeave(this)"
              ondrop="onFolderDrop(event, this)">
-            <div class="yd-folder-icon"></div>
-            <span class="yd-folder-name">{{ item.name }}</span>
+            <div class="yd-folder-icon" style="--fc:{{ folder_colors[item.color % folder_colors|length] }}"></div>
+            <span class="yd-folder-name" title="{{ item.name }}">{{ item.name }}</span>
+            <span class="yd-meta">{{ item.created_at.strftime('%d.%m.%Y') if item.created_at }}</span>
         </div>
         {% endfor %}
     </div>
     {% endif %}
 
     {% if files %}
-    {% if folders %}<div style="font-size:12px;color:#bbb;margin-bottom:8px;font-weight:500;letter-spacing:.3px;">ФАЙЛЫ</div>{% endif %}
+    <div class="yd-section-label"><i class="bi bi-file-earmark-fill" style="color:#E0A800"></i> ФАЙЛЫ · {{ files|length }}</div>
     <div class="yd-grid">
         {% for item in files %}
         {% set ext = item.name.rsplit('.', 1)[-1].lower() if '.' in item.name else '' %}
@@ -238,7 +185,9 @@
                 <div class="file-icon-wrap {{ fi_cls }}"><i class="bi {{ fi_icon }}"></i></div>
                 {% endif %}
             </div>
-            <span class="yd-file-name">{{ item.name }}</span>
+            {% if ext %}<span class="yd-ext">{{ ext[:5] }}</span>{% endif %}
+            <span class="yd-file-name" title="{{ item.name }}">{{ item.name }}</span>
+            <span class="yd-meta">{{ item.size | filesize }} · {{ item.created_at.strftime('%d.%m.%Y') if item.created_at }}</span>
         </div>
         {% endfor %}
     </div>
@@ -246,12 +195,17 @@
 
     {% if not folders and not files %}
     <div class="yd-empty">
-        <i class="bi bi-folder2-open"></i>
-        <h3>Папка пуста</h3>
-        <p>Перетащите файлы сюда или нажмите «Загрузить»</p>
-        <button class="yd-btn-upload" id="emptyUploadBtn" style="width:auto;margin-top:4px;">
-            <i class="bi bi-cloud-upload"></i> Загрузить файл
-        </button>
+        <div class="yd-empty-ico"><i class="bi bi-cloud-arrow-up-fill"></i></div>
+        <h3>{% if current_path == '/' %}Здесь пока пусто{% else %}Папка пуста{% endif %}</h3>
+        <p>Перетащите файлы прямо в это окно или нажмите кнопку ниже</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px;">
+            <button class="yd-btn-upload" id="emptyUploadBtn" style="width:auto;padding:10px 22px;">
+                <i class="bi bi-cloud-arrow-up-fill"></i> Загрузить файлы
+            </button>
+            <button class="yd-btn-create" style="width:auto;padding:10px 22px;" data-bs-toggle="modal" data-bs-target="#mkdirModal">
+                <i class="bi bi-folder-plus"></i> Новая папка
+            </button>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -312,22 +266,24 @@ function buildSelectionActions() {
     if (selectedItems.length === 1) {
         const el    = selectedItems[0];
         const type  = el.dataset.type;
-        const id    = el.dataset.id;
-        const sn    = el.dataset.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        const id    = jsq(el.dataset.id);
+        const sn    = jsq(el.dataset.name);
         const par   = el.dataset.parentPath || CURRENT_PATH;
-        if (type==='file')
-            html += `<a href="${el.dataset.downloadUrl}" class="sel-btn"><i class="bi bi-download"></i> Скачать</a><div class="sel-sep"></div>`;
+        html += `<button class="sel-btn" onclick="handleItemDblClick(selectedItems[0])"><i class="bi bi-box-arrow-up-right"></i><span class="lbl"> Открыть</span></button><div class="sel-sep"></div>`;
+        const downloadUrl = type === 'folder' ? '/files/download?path=' + encodeURIComponent(el.dataset.destPath) : el.dataset.downloadUrl;
+        html += `<a href="${downloadUrl}" class="sel-btn"><i class="bi bi-download"></i><span class="lbl"> Скачать</span></a><div class="sel-sep"></div>`;
+        html += `<button class="sel-btn" onclick="openShareDialog()"><i class="bi bi-share"></i><span class="lbl"> Поделиться</span></button><div class="sel-sep"></div>`;
         html += `
         <div class="dropdown">
           <button class="sel-btn dropdown-toggle" data-bs-toggle="dropdown" style="gap:4px;"><i class="bi bi-three-dots"></i></button>
           <ul class="dropdown-menu sel-more-menu">
             <li><a class="dropdown-item" href="#" onclick="event.preventDefault();openRename('${id}','${sn}')"><i class="bi bi-pencil"></i> Переименовать</a></li>
-            ${type==='file'?`<li><a class="dropdown-item" href="#" onclick="event.preventDefault();copyItem('${id}')"><i class="bi bi-files"></i> Копировать</a></li>`:''}
-            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();openMove('${id}','${sn}','${par}')"><i class="bi bi-folder-symlink"></i> Переместить в…</a></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();openCopyTo('${id}','${sn}','${type}')"><i class="bi bi-files"></i> Копировать в…</a></li>
+            <li><a class="dropdown-item" href="#" onclick="event.preventDefault();openMove('${id}','${sn}','${jsq(skipFor(el))}')"><i class="bi bi-folder-symlink"></i> Переместить в…</a></li>
           </ul>
         </div>
         <div class="sel-sep"></div>
-        <button class="sel-btn danger" onclick="confirmDeleteSelected()"><i class="bi bi-trash3"></i> В корзину</button>`;
+        <button class="sel-btn danger" onclick="confirmDeleteSelected()"><i class="bi bi-trash3"></i><span class="lbl"> В корзину</span></button>`;
     } else {
         html = `
         <button class="sel-btn" onclick="openMoveSelected()"><i class="bi bi-folder-symlink"></i> Переместить</button>
@@ -365,6 +321,27 @@ function handleItemDblClick(el) {
     }
 }
 
+// Строка для вставки в onclick='...': экранируем \ ' "
+// Папку нельзя переместить в неё саму — в окне выбора она и вложенные будут серыми
+function skipFor(el) { return el.dataset.type === 'folder' ? el.dataset.id + '/' : ''; }
+function jsq(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+// ── Публичная ссылка на файл (7 дней) ─────────────────────────────────────────
+function openShareDialog() {
+    const el = selectedItems[0];
+    if (!el) return;
+    document.getElementById('sharePath').value = el.dataset.type === 'folder' ? el.dataset.destPath : el.dataset.parentPath + el.dataset.name;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('shareModal')).show();
+}
+
+// ── Подсказка ─────────────────────────────────────────────────────────────────
+function hideHint() {
+    document.getElementById('hint').style.display = 'none';
+    try { localStorage.setItem('disk_hint_hidden', '1'); } catch (e) {}
+}
+try { if (localStorage.getItem('disk_hint_hidden') !== '1') document.getElementById('hint').style.display = 'flex'; }
+catch (e) { document.getElementById('hint').style.display = 'flex'; }
+
 // ── Delete helpers ────────────────────────────────────────────────────────────
 function confirmDeleteSelected() {
     if (!selectedItems.length) return;
@@ -380,7 +357,7 @@ function confirmDeleteSelected() {
 function openMoveSelected() {
     if (selectedItems.length === 1) {
         const el = selectedItems[0];
-        openMove(el.dataset.id, el.dataset.name, el.dataset.parentPath || CURRENT_PATH);
+        openMove(el.dataset.id, el.dataset.name, skipFor(el));
     } else {
         _moveSelectedPath = null;
         _moveBatchIds = selectedItems.map(el => el.dataset.id);
@@ -513,24 +490,18 @@ document.getElementById('mainContent').addEventListener('contextmenu', e => {
                 }
             }
         });
-        menuItems.push({ icon:'<i class="bi bi-scissors"></i>', bg:'#FFF3E0', color:'#F57C00',
-            label: multi ? `Переместить (${selectedItems.length})` : 'Вырезать',
-            action: () => {
-                if (multi) {
-                    _moveSelectedPath = null;
-                    _moveBatchIds = selectedItems.map(i => i.dataset.id);
-                    _moveSkipPath = null;
-                    const t = document.getElementById('moveModalTitle');
-                    if (t) t.innerHTML = '<i class="bi bi-folder-symlink me-2"></i>Переместить в…';
-                    const btn = document.getElementById('moveConfirmBtn');
-                    if (btn) btn.disabled = false;
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('moveModal')).show();
-                    _loadMoveFoldersPicker('/');
-                } else {
-                    openMove(id, name, par);
-                }
-            }
-        });
+        if (!multi) {
+            menuItems.unshift({ icon:'<i class="bi bi-download"></i>', bg:'#DCFCE7', color:'#16A34A', label:'Скачать',
+                action:()=>{ window.location.href = el.dataset.type === 'folder' ? '/files/download?path=' + encodeURIComponent(el.dataset.destPath) : el.dataset.downloadUrl; } });
+        }
+        if (!multi) {
+            menuItems.push({ icon:'<i class="bi bi-share"></i>', bg:'#FCE7F3', color:'#DB2777', label:'Поделиться',
+                action:()=>openShareDialog() });
+        }
+        if (!multi) {
+            menuItems.unshift({ icon:'<i class="bi bi-box-arrow-up-right"></i>', bg:'#EEF2FF', color:'#4F46E5',
+                label: type === 'folder' ? 'Открыть папку' : 'Открыть', action:()=>handleItemDblClick(el) });
+        }
         menuItems.push('sep');
         menuItems.push({ icon:'<i class="bi bi-folder-symlink"></i>', bg:'#F3E5F5', color:'#8E24AA',
             label: multi ? `Переместить (${selectedItems.length})` : 'Переместить в…',
@@ -544,7 +515,7 @@ document.getElementById('mainContent').addEventListener('contextmenu', e => {
     } else {
         // Background menu
         const bgItems = [
-            { icon:'<i class="bi bi-folder-plus"></i>', bg:'#FFF9DB', color:'#a07000', label:'Новая папка',
+            { icon:'<i class="bi bi-folder-plus"></i>', bg:'#FEF3C7', color:'#D97706', label:'Новая папка',
               action:()=>bootstrap.Modal.getOrCreateInstance(document.getElementById('mkdirModal')).show() },
             { icon:'<i class="bi bi-cloud-upload"></i>', bg:'#E3F2FD', color:'#1976D2', label:'Загрузить файлы',
               action:()=>document.getElementById('globalFileInput').click() }

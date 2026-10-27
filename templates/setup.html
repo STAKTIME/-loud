@@ -1,0 +1,31 @@
+{% extends "_auth_base.html" %}
+{% block title %}Первый запуск — {{ disk_name }}{% endblock %}
+{% block card %}
+<div class="logo"><i class="bi bi-stars"></i></div>
+<h1>Добро пожаловать!</h1>
+<p class="sub">Это первый запуск. Придумайте пароль администратора — с ним вы будете входить и добавлять других пользователей.</p>
+<form method="POST">
+    <div class="field">
+        <label>Как вас называть</label>
+        <input type="text" name="username" value="{{ username }}" placeholder="Например: Админ" maxlength="80" style="padding-right:16px">
+    </div>
+    <div class="field">
+        <label>Пароль (не короче 4 символов)</label>
+        <input type="password" name="password" required minlength="4" autocomplete="new-password">
+        <button type="button" class="eye" title="Показать пароль"><i class="bi bi-eye"></i></button>
+    </div>
+    <div class="field">
+        <label>Повторите пароль</label>
+        <input type="password" name="password2" required minlength="4" autocomplete="new-password">
+        <button type="button" class="eye" title="Показать пароль"><i class="bi bi-eye"></i></button>
+    </div>
+    {% if not storage_from_env %}
+    <div class="field">
+        <label>Где хранить файлы (диск или папка)</label>
+        <input type="text" name="storage_root" value="{{ storage }}" placeholder="D:\" required style="padding-right:16px;font-family:Consolas,monospace">
+        <div style="font-size:12px;color:#8A877F;margin-top:5px;line-height:1.45">Например <b>D:\</b> — весь диск. Вы как администратор увидите на сайте всё, что на нём лежит.</div>
+    </div>
+    {% endif %}
+    <button type="submit" class="btn"><i class="bi bi-rocket-takeoff-fill"></i> Создать диск</button>
+</form>
+{% endblock %}

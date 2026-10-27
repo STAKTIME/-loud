@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Помощь — {{ disk_name }}{% endblock %}
+
+{% block extra_styles %}
+.help-wrap { max-width: 900px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.help-card { background: #fff; border-radius: 18px; border: 1px solid var(--yd-border); padding: 18px 20px; }
+.help-card h2 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.help-card h2 .ico { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--c-primary); color: #3D3000; font-size: 15px; flex-shrink: 0; }
+.help-card ul { padding-left: 18px; font-size: 13.5px; line-height: 1.65; color: #4A473F; }
+.help-card li { margin-bottom: 3px; }
+.help-card kbd { background: var(--yd-yellow-light); color: #5C4700; border-radius: 5px; padding: 0 5px; font-size: 12px; }
+.help-wide { grid-column: 1 / -1; }
+{% endblock %}
+
+{% block main %}
+<div class="yd-main-head">
+    <span class="yd-main-title"><i class="bi bi-question-circle-fill" style="color:#E0A800"></i> Помощь</span>
+</div>
+<div class="yd-content">
+<div class="help-wrap">
+    <div class="help-card">
+        <h2><span class="ico"><i class="bi bi-cloud-arrow-up-fill"></i></span> Загрузить файлы</h2>
+        <ul>
+            <li>Кнопка <b>«Загрузить файлы»</b> слева (на телефоне — значок облака вверху).</li>
+            <li>Или просто перетащите файлы мышкой в окно.</li>
+            <li>Файлы попадают в папку, которая сейчас открыта.</li>
+        </ul>
+    </div>
+    <div class="help-card">
+        <h2><span class="ico"><i class="bi bi-hand-index-thumb-fill"></i></span> Действия с файлами</h2>
+        <ul>
+            <li><b>Один клик</b> — выбрать: сверху появятся кнопки «Открыть», «Скачать», «Ссылка», «В корзину» и <i class="bi bi-three-dots"></i> (переименовать, копировать, переместить).</li>
+            <li><b>Двойной клик</b> — открыть: фото, видео, музыка, PDF и текст смотрятся прямо в браузере.</li>
+            <li><b>Правая кнопка мыши</b> — меню со всеми действиями.</li>
+            <li><kbd>Shift</kbd> + клик — выбрать несколько, <kbd>Delete</kbd> — в корзину, <kbd>Esc</kbd> — снять выбор.</li>
+        </ul>
+    </div>
+    <div class="help-card">
+        <h2><span class="ico"><i class="bi bi-folder-fill"></i></span> Папки</h2>
+        <ul>
+            <li><b>«Новая папка»</b> слева создаёт папку там, где вы сейчас.</li>
+            <li>Чтобы переложить файл в папку — перетащите его на папку.</li>
+            <li>Путь сверху (<i class="bi bi-house-door-fill"></i> Мои файлы › …) — быстрый переход назад.</li>
+            <li>Значки <i class="bi bi-grid-3x3-gap-fill"></i> / <i class="bi bi-list-ul"></i> справа — плитка или список с размерами.</li>
+        </ul>
+    </div>
+    <div class="help-card">
+        <h2><span class="ico"><i class="bi bi-trash3-fill"></i></span> Корзина</h2>
+        <ul>
+            <li>Удалённое не стирается сразу, а попадает в корзину.</li>
+            <li>Там можно <b>«Вернуть»</b> или удалить навсегда.</li>
+            <li>«Очистить корзину» удаляет всё в ней без возврата.</li>
+        </ul>
+    </div>
+    <div class="help-card">
+        <h2><span class="ico"><i class="bi bi-link-45deg"></i></span> Поделиться файлом</h2>
+        <ul>
+            <li>Выберите файл → <b>«Ссылка»</b>. Появится адрес — отправьте его кому угодно.</li>
+            <li>По ссылке файл скачивается без пароля, ссылка работает 7 дней.</li>
+        </ul>
+    </div>
+    <div class="help-card">
+        <h2><span class="ico"><i class="bi bi-phone-fill"></i></span> С телефона</h2>
+        <ul>
+            <li>Откройте в браузере тот же адрес, что и на компьютере.</li>
+            <li>Меню — кнопка <i class="bi bi-list"></i> слева вверху.</li>
+            <li>Нажмите на файл, чтобы выбрать, затем «Открыть» или «Скачать».</li>
+        </ul>
+    </div>
+    {% if current_user.is_admin %}
+    <div class="help-card help-wide">
+        <h2><span class="ico"><i class="bi bi-people-fill"></i></span> Для администратора: пользователи</h2>
+        <ul>
+            <li>Человек придумывает пароль и говорит его вам. Откройте <b>«Пользователи»</b>, введите имя и этот пароль, нажмите «Добавить».</li>
+            <li>Он заходит на тот же адрес и вводит только свой пароль — логина нет. Видит он только свою папку <b>Пользователи\&lt;имя&gt;</b>, а вы — весь диск.</li>
+            <li>Всё, что вы делаете на сайте, сразу происходит с настоящими файлами на диске — и наоборот.</li>
+            <li>Пароли у всех должны быть разные: если пароль уже занят, сайт скажет об этом — попросите человека выбрать другой.</li>
+            <li>Забыл пароль — кнопка <b>«Пароль»</b> в его карточке, впишите новый, который он выберет.</li>
+            <li><b>«Сделать админом»</b> — человек тоже сможет управлять пользователями. «Удалить» убирает человека вместе со всеми его файлами.</li>
+            <li>Полная инструкция по запуску и настройке — файл <b>README.md</b> в папке программы.</li>
+        </ul>
+    </div>
+    {% endif %}
+</div>
+</div>
+{% endblock %}

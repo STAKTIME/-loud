@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — {{ disk_name }}{% endblock %}
+
+{% block extra_styles %}
+.adm-wrap { max-width: 980px; }
+.adm-card { background: #fff; border-radius: 18px; border: 1px solid var(--yd-border); padding: 20px 22px; margin-bottom: 20px; }
+.adm-card h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.adm-card .note { font-size: 13px; color: var(--yd-muted); margin-bottom: 16px; line-height: 1.5; }
+.adm-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+.adm-form label, .adm-modal label { display: block; font-size: 12px; font-weight: 600; color: #5C5A55; margin-bottom: 5px; }
+.adm-input { width: 100%; border: 1.5px solid var(--yd-border); border-radius: 10px; padding: 9px 12px; font-size: 14px; outline: none; font-family: inherit; }
+.adm-input:focus { border-color: var(--c-primary); box-shadow: 0 0 0 3px rgba(255,204,0,.25); }
+.adm-input.mono { font-family: Consolas, monospace; letter-spacing: .5px; }
+.pw-row { display: flex; gap: 6px; }
+.icon-btn { flex-shrink: 0; width: 40px; border: 1.5px solid var(--yd-border); background: #fff; border-radius: 10px; color: var(--c-primary); font-size: 16px; cursor: pointer; }
+.icon-btn:hover { background: var(--yd-hover); }
+.adm-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #5C5A55; margin-top: 12px; cursor: pointer; }
+.adm-check input { accent-color: var(--c-primary); width: 16px; height: 16px; }
+
+.users-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.u-card { background: #fff; border-radius: 18px; border: 1px solid var(--yd-border); padding: 18px; display: flex; flex-direction: column; gap: 14px; border: 1.5px solid transparent; }
+.u-card.me { border-color: var(--c-primary); }
+.u-head { display: flex; align-items: center; gap: 12px; }
+.u-ava { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 19px; flex-shrink: 0; }
+.u-name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.u-badges { display: flex; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+.badge-r { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+.badge-admin { background: #FEF3C7; color: #B45309; }
+.badge-user { background: #F4F2EB; color: #5C5A55; }
+.badge-me { background: #DCFCE7; color: #15803D; }
+.u-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.u-stat { background: var(--yd-bg); border-radius: 12px; padding: 8px 10px; }
+.u-stat b { display: block; font-size: 14px; }
+.u-stat span { font-size: 11px; color: var(--yd-muted); }
+.u-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.u-btn { display: inline-flex; align-items: center; gap: 5px; border: none; border-radius: 9px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.u-btn.pw { background: var(--c-primary); color: #3D3000; }
+.u-btn.ren { background: #F4F2EB; color: #4A473F; }
+.u-btn.adm { background: #FEF3C7; color: #B45309; }
+.u-btn.del { background: #FEE2E2; color: #DC2626; }
+.u-btn:hover { filter: brightness(.95); }
+@media (max-width: 700px) { .adm-form { grid-template-columns: 1fr; } }
+{% endblock %}
+
+{% block main %}
+<div class="yd-main-head">
+    <span class="yd-main-title"><i class="bi bi-people-fill" style="color:#E0A800"></i> Пользователи</span>
+    <span style="font-size:13px;color:var(--yd-muted);white-space:nowrap;">{{ users|length }} чел.</span>
+</div>
+
+<div class="yd-content">
+<div class="adm-wrap">
+    <div class="adm-card">
+        <h2><i class="bi bi-person-plus-fill" style="color:#E0A800"></i> Добавить пользователя</h2>
+        <p class="note">Человек сам придумывает себе пароль и говорит его вам — вы вводите его здесь.
+            Логина нет: входят <b>только по паролю</b>, поэтому у всех пароли разные
+            (если пароль занят, попросите выбрать другой).<br>
+            Для обычного пользователя создаётся папка <code>{{ users_dir }}\&lt;имя&gt;</code> — он видит только её.
+            Администратор видит весь диск.</p>
+        <form method="POST" action="{{ url_for('admin.add_user') }}">
+            <div class="adm-form">
+                <div>
+                    <label>Имя (видно только в списке)</label>
+                    <input class="adm-input" name="username" placeholder="Например: Мама" required maxlength="80">
+                </div>
+                <div>
+                    <label>Пароль, который выбрал пользователь</label>
+                    <input class="adm-input mono" name="password" placeholder="не короче 4 символов" required minlength="4" autocomplete="off">
+                </div>
+                <button type="submit" class="yd-btn-upload" style="width:auto;padding:10px 18px;"><i class="bi bi-plus-lg"></i> Добавить</button>
+            </div>
+            <div class="mt-3">
+                <label>Доступ к диску</label>
+                <select class="adm-input" name="access" id="newUserAccess" onchange="document.getElementById('newUserQuota').disabled=this.value==='full'">
+                    <option value="limited" selected>Личная папка с лимитом</option>
+                    <option value="full">Полный доступ к хранилищу как у администратора</option>
+                </select>
+                <div class="d-flex gap-2 align-items-center mt-2"><input class="adm-input" id="newUserQuota" type="number" name="quota_gb" min="0" step="0.1" placeholder="Лимит в ГБ (пусто — без лимита)"><span class="text-muted small">Личный доступ</span></div>
+            </div>
+        </form>
+    </div>
+
+    <div class="users-grid">
+    {% set palette = ['#FFCC00', '#FFD84D', '#FFE380', '#F5C000'] %}
+    {% for u in users %}
+        {% set is_me = u.id == current_user.id %}
+        <div class="u-card {{ 'me' if is_me }}">
+            <div class="u-head">
+                <div class="u-ava" style="background:{{ palette[u.id % palette|length] }};color:#3D3000">{{ u.username[0].upper() }}</div>
+                <div style="min-width:0;">
+                    <div class="u-name" title="{{ u.username }}">{{ u.username }}</div>
+                    <div class="u-badges">
+                        {% if u.is_admin %}<span class="badge-r badge-admin"><i class="bi bi-star-fill"></i> Админ</span>
+                        {% elif u.full_access %}<span class="badge-r badge-admin"><i class="bi bi-hdd-fill"></i> Весь диск</span>
+                        {% else %}<span class="badge-r badge-user">Пользователь</span>{% endif %}
+                        {% if is_me %}<span class="badge-r badge-me">это вы</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="u-stats">
+                {% if u.is_admin or u.full_access %}
+                <div class="u-stat" style="grid-column:span 2"><b>весь диск</b><span>{{ 'управляет пользователями' if u.is_admin else 'полный доступ к файлам' }}</span></div>
+                {% else %}
+                <div class="u-stat"><b>{{ counts.get(u.id, 0) }}</b><span>файлов</span></div>
+                <div class="u-stat"><b>{{ usage.get(u.id, 0) | filesize }}</b><span>занято</span></div>
+                <div class="u-stat"><b>{{ (u.quota_gb|string + ' ГБ') if u.quota_gb is not none else 'без лимита' }}</b><span>лимит</span></div>
+                {% endif %}
+                <div class="u-stat"><b>{{ u.last_login.strftime('%d.%m') if u.last_login else '—' }}</b><span>был(а)</span></div>
+            </div>
+            <div class="u-actions">
+                {% if not u.is_admin %}<form method="POST" action="{{ url_for('admin.set_quota', user_id=u.id) }}" style="display:flex;gap:4px"><input class="adm-input" style="width:92px;padding:6px 8px" type="number" min="0" step="0.1" name="quota_gb" value="{{ u.quota_gb if u.quota_gb is not none else '' }}" placeholder="ГБ"><button class="u-btn ren" title="Лимит"><i class="bi bi-hdd"></i></button></form>{% endif %}
+                <button class="u-btn pw" onclick="openPw({{ u.id }}, {{ u.username|tojson|forceescape }})"><i class="bi bi-key-fill"></i> Пароль</button>
+                <button class="u-btn ren" onclick="openRen({{ u.id }}, {{ u.username|tojson|forceescape }})"><i class="bi bi-pencil-fill"></i> Имя</button>
+                <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=u.id) }}" style="display:inline">
+                    <button class="u-btn adm"><i class="bi bi-star{{ '' if u.is_admin else '-fill' }}"></i> {{ 'Снять админа' if u.is_admin else 'Сделать админом' }}</button>
+                </form>
+                {% if not is_me %}
+                <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" style="display:inline"
+                      onsubmit="return confirm('Удалить пользователя «' + {{ u.username|tojson|forceescape }} + '»? Его папка уйдёт в вашу корзину, оттуда её можно вернуть.')">
+                    <button class="u-btn del"><i class="bi bi-trash3-fill"></i> Удалить</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+</div>
+</div>
+
+<!-- Смена пароля -->
+<div class="modal fade adm-modal" id="pwModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <form method="POST" id="pwForm">
+      <div class="modal-content">
+        <div class="modal-header" style="padding:16px 20px;">
+          <h5 class="modal-title" style="font-size:16px;font-weight:700;"><i class="bi bi-key-fill me-1" style="color:#E0A800"></i> Новый пароль: <span id="pwName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:18px 20px;">
+          <label>Новый пароль, который выбрал пользователь (старый перестанет работать)</label>
+          <input class="adm-input mono" name="password" id="pwInput" required minlength="4" autocomplete="off">
+        </div>
+        <div class="modal-footer" style="padding:12px 20px;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:8px 18px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;">Сохранить</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Переименование -->
+<div class="modal fade adm-modal" id="renModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <form method="POST" id="renForm">
+      <div class="modal-content">
+        <div class="modal-header" style="padding:16px 20px;">
+          <h5 class="modal-title" style="font-size:16px;font-weight:700;"><i class="bi bi-pencil-fill me-1" style="color:#E0A800"></i> Изменить имя</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:18px 20px;">
+          <input class="adm-input" name="username" id="renInput" required maxlength="80">
+        </div>
+        <div class="modal-footer" style="padding:12px 20px;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:8px 18px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;">Сохранить</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PW_URL  = {{ url_for('admin.set_password', user_id=0)|tojson }};
+const REN_URL = {{ url_for('admin.rename_user', user_id=0)|tojson }};
+
+function openPw(id, name) {
+    document.getElementById('pwForm').action = PW_URL.replace('/0/', '/' + id + '/');
+    document.getElementById('pwName').textContent = name;
+    document.getElementById('pwInput').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('pwModal')).show();
+    setTimeout(() => document.getElementById('pwInput').focus(), 200);
+}
+function openRen(id, name) {
+    document.getElementById('renForm').action = REN_URL.replace('/0/', '/' + id + '/');
+    document.getElementById('renInput').value = name;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('renModal')).show();
+    setTimeout(() => document.getElementById('renInput').select(), 200);
+}
+// Сообщение с новым паролем не прячем автоматически — его нужно успеть записать
+document.querySelectorAll('.yd-alert .pw-shown').forEach(el => {
+    const a = el.closest('.yd-alert'); const c = a.cloneNode(true); a.replaceWith(c);
+});
+</script>
+{% endblock %}

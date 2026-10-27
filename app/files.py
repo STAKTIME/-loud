@@ -1,627 +1,625 @@
 import os
 import uuid
-import shutil as sh
+import shutil
+import tempfile
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, current_app, jsonify, abort
 from flask_login import login_required, current_user
+from markupsafe import escape
 from app import db
-from app.models import FileMetadata, ShareLink
+from app.models import TrashItem, Share, Album, AlbumItem, Activity
+from app.storage import (resolve, list_dir, to_vpath, norm_vpath, is_locked, clean_name, bad_name,
+                         unique_path, folder_size, user_home, is_hidden_name, is_protected, Entry, BAD_NAME_MSG, quota_exceeded, quota_exceeded_after_upload)
 
 files_bp = Blueprint('files', __name__)
 
-def normalize_path(path):
-    if '..' in path:
-        raise ValueError('Invalid path')
-    if not path.startswith('/'):
-        path = '/' + path
-    if path != '/' and not path.endswith('/'):
-        path += '/'
-    return path
+UNSAFE_INLINE = {'html', 'htm', 'xhtml', 'shtml', 'js', 'mjs', 'xml'}
+SEARCH_LIMIT = 300
 
-def get_user_storage_path(user_id, storage_name):
-    base = os.path.join(current_app.config['UPLOAD_BASE_DIR'], str(user_id))
-    os.makedirs(base, exist_ok=True)
-    return os.path.join(base, storage_name)
 
-def _parse_file_path(path):
-    if '..' in path:
-        raise ValueError
-    if not path.startswith('/'):
-        path = '/' + path
-    parts = path.rsplit('/', 1)
-    name = parts[1]
-    parent = parts[0] + '/' if parts[0] else '/'
-    parent = normalize_path(parent)
-    return name, parent
+def _folder_arg(name='path'):
+    try:
+        return norm_vpath(request.args.get(name, '/'), folder=True)
+    except ValueError:
+        abort(404)
 
-# ── List files ──────────────────────────────────────────────────────────────
+
+def _form_path(name, folder=False):
+    try:
+        return norm_vpath(request.form.get(name, '/'), folder=folder)
+    except ValueError:
+        abort(404)
+
+
+def _go(vpath):
+    return redirect(url_for('files.list_files', path=vpath or '/'))
+
+
+def _trash_dir():
+    d = os.path.join(current_app.config['DATA_DIR'], 'trash')
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _to_trash(real):
+    """Переносит файл/папку в корзину программы и записывает, откуда он."""
+    is_dir = os.path.isdir(real)
+    size = folder_size(real) if is_dir else os.path.getsize(real)
+    item = TrashItem(user_id=current_user.id, name=os.path.basename(real),
+                     parent_path=norm_vpath(os.path.dirname(to_vpath(current_user, real)), folder=True),
+                     trash_name=uuid.uuid4().hex, is_directory=is_dir, size=size,
+                     deleted_at=datetime.utcnow())
+    shutil.move(real, os.path.join(_trash_dir(), item.trash_name))
+    db.session.add(item)
+
+
+def _move(src, dest_folder):
+    """Перенос с проверками. Возвращает текст ошибки или None."""
+    if is_locked(current_user, src):
+        return f'«{escape(os.path.basename(src))}» — системная папка, её нельзя переносить'
+    if os.path.normcase(os.path.dirname(src)) == os.path.normcase(dest_folder):
+        return None
+    if os.path.isdir(src) and os.path.normcase(dest_folder + os.sep).startswith(os.path.normcase(src + os.sep)):
+        return 'Нельзя переместить папку внутрь самой себя'
+    target = os.path.join(dest_folder, os.path.basename(src))
+    if os.path.exists(target):
+        return f'В папке назначения уже есть «{escape(os.path.basename(src))}»'
+    shutil.move(src, target)
+    return None
+
+# ── Альбомы и история ────────────────────────────────────────────────────────
+IMAGE_EXTS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'}
+
+def _record(action, path=None):
+    db.session.add(Activity(user_id=current_user.id, action=action, path=path))
+
+def _user_images():
+    home = resolve(current_user, '/')
+    result = []
+    for root, dirs, names in os.walk(home):
+        dirs[:] = [d for d in dirs if not is_hidden_name(d) and not is_protected(os.path.join(root, d))]
+        for name in names:
+            if name.rsplit('.', 1)[-1].lower() in IMAGE_EXTS:
+                result.append(to_vpath(current_user, os.path.join(root, name)))
+    return sorted(result)
+
+
+def _user_folders():
+    home = resolve(current_user, '/')
+    result = ['/']
+    for root, dirs, _ in os.walk(home):
+        dirs[:] = [d for d in dirs if not is_hidden_name(d) and not is_protected(os.path.join(root, d))]
+        for name in dirs:
+            result.append(to_vpath(current_user, os.path.join(root, name)) + '/')
+    return sorted(set(result), key=lambda path: (path.count('/'), path.lower()))
+
+@files_bp.route('/albums')
+@login_required
+def albums():
+    return render_template('albums.html', albums=Album.query.filter_by(user_id=current_user.id).order_by(Album.created_at.desc()).all())
+
+@files_bp.route('/albums/create', methods=['POST'])
+@login_required
+def create_album():
+    name = request.form.get('name', '').strip()
+    if bad_name(name):
+        flash(BAD_NAME_MSG, 'danger')
+    else:
+        db.session.add(Album(user_id=current_user.id, name=name))
+        db.session.commit()
+        flash('Альбом создан', 'success')
+    return redirect(url_for('files.albums'))
+
+@files_bp.route('/albums/<int:album_id>/upload', methods=['POST'])
+@login_required
+def album_upload(album_id):
+    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
+    try:
+        dest_path = norm_vpath(request.form.get('dest_path', '/'), folder=True)
+    except ValueError:
+        abort(404)
+    target_folder = resolve(current_user, dest_path)
+    if not os.path.isdir(target_folder):
+        abort(404)
+    for f in request.files.getlist('photos'):
+        name = clean_name(f.filename)
+        if not name or name.rsplit('.', 1)[-1].lower() not in IMAGE_EXTS:
+            continue
+        size = getattr(f, 'content_length', None) or 0
+        if not size:
+            try:
+                f.stream.seek(0, os.SEEK_END)
+                size = f.stream.tell()
+                f.stream.seek(0)
+            except (OSError, ValueError):
+                size = 0
+        if quota_exceeded_after_upload(current_user, size):
+            flash('Превышен лимит места на диске', 'danger')
+            continue
+        target = unique_path(target_folder, name)
+        try:
+            f.save(target)
+        except OSError:
+            flash(f'Не удалось сохранить «{escape(name)}»', 'danger')
+            continue
+        path = to_vpath(current_user, target)
+        db.session.add(AlbumItem(album_id=album.id, path=path))
+        _record('upload', path)
+    db.session.commit()
+    return redirect(url_for('files.album_view', album_id=album.id))
+
+@files_bp.route('/albums/<int:album_id>/share', methods=['POST'])
+@login_required
+def share_album(album_id):
+    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
+    days = request.form.get('expires_days', '7')
+    try: days = int(days)
+    except ValueError: days = 7
+    expires = None if days == 0 else datetime.utcnow() + timedelta(days=max(1, days))
+    share = Share(user_id=current_user.id, path='@album:' + str(album.id), token=uuid.uuid4().hex, expires_at=expires, allow_download=request.form.get('allow_download') == '1')
+    db.session.add(share); db.session.commit()
+    flash('Ссылка на альбом создана: ' + url_for('public.browse_shared', token=share.token, _external=True), 'success')
+    return redirect(url_for('files.album_view', album_id=album.id))
+
+@files_bp.route('/albums/<int:album_id>')
+@login_required
+def album_view(album_id):
+    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
+    items = AlbumItem.query.filter_by(album_id=album.id).all()
+    valid = []
+    for item in items:
+        try:
+            if os.path.isfile(resolve(current_user, item.path)):
+                valid.append(item)
+        except Exception:
+            continue
+    return render_template('album.html', album=album, paths=[i.path for i in valid], available=_user_images(), folders=_user_folders())
+
+@files_bp.route('/albums/<int:album_id>/add', methods=['POST'])
+@login_required
+def album_add(album_id):
+    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
+    selected_paths = request.form.getlist('paths') or request.form.getlist('paths[]')
+    for path in selected_paths:
+        try:
+            real = resolve(current_user, path)
+            if os.path.isfile(real) and os.path.splitext(real)[1][1:].lower() in IMAGE_EXTS:
+                if not AlbumItem.query.filter_by(album_id=album.id, path=norm_vpath(path)).first():
+                    db.session.add(AlbumItem(album_id=album.id, path=norm_vpath(path)))
+        except Exception:
+            continue
+    db.session.commit()
+    return redirect(url_for('files.album_view', album_id=album.id))
+
+@files_bp.route('/history')
+@login_required
+def history():
+    return render_template('history.html', activities=Activity.query.filter_by(user_id=current_user.id).order_by(Activity.created_at.desc()).limit(300).all())
+
+# ── Список файлов ─────────────────────────────────────────────────────────────
 
 @files_bp.route('/')
 @login_required
 def list_files():
-    current_path = request.args.get('path', '/')
-    try:
-        current_path = normalize_path(current_path)
-    except ValueError:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files'))
-    items = FileMetadata.query.filter_by(
-        user_id=current_user.id,
-        parent_path=current_path,
-        is_deleted=False
-    ).order_by(FileMetadata.is_directory.desc(), FileMetadata.name).all()
+    current_path = _folder_arg()
+    real = resolve(current_user, current_path)
+    if not os.path.isdir(real):
+        return _go(norm_vpath(current_path.rsplit('/', 1)[0], folder=True))
+    items = list_dir(current_user, real)
+    if items is None:
+        flash('Нет доступа к этой папке (её закрыла Windows)', 'danger')
+        items = []
     parent_path = None
     if current_path != '/':
         parts = current_path.strip('/').split('/')
         parent_path = '/' + '/'.join(parts[:-1]) + '/' if len(parts) > 1 else '/'
     return render_template('index.html', items=items, current_path=current_path, parent_path=parent_path)
 
-# ── Search ───────────────────────────────────────────────────────────────────
+# ── Поиск ─────────────────────────────────────────────────────────────────────
 
 @files_bp.route('/search')
 @login_required
 def search():
     q = request.args.get('q', '').strip()
     if not q:
-        return redirect(url_for('files.list_files'))
-    folders = FileMetadata.query.filter(
-        FileMetadata.user_id == current_user.id,
-        FileMetadata.name.ilike(f'%{q}%'),
-        FileMetadata.is_directory == True,
-        FileMetadata.is_deleted == False
-    ).order_by(FileMetadata.name).all()
-    files = FileMetadata.query.filter(
-        FileMetadata.user_id == current_user.id,
-        FileMetadata.name.ilike(f'%{q}%'),
-        FileMetadata.is_directory == False,
-        FileMetadata.is_deleted == False
-    ).order_by(FileMetadata.name).all()
+        return _go('/')
+    ql = q.lower()
+    folders, files, truncated = [], [], False
+    home = resolve(current_user, '/')
+    for dirpath, dirnames, filenames in os.walk(home):
+        dirnames[:] = [d for d in dirnames
+                       if not is_hidden_name(d) and not is_protected(os.path.join(dirpath, d))]
+        for name in dirnames + filenames:
+            if ql in name.lower():
+                try:
+                    e = Entry(current_user, os.path.join(dirpath, name))
+                except OSError:
+                    continue
+                (folders if e.is_directory else files).append(e)
+                if len(folders) + len(files) >= SEARCH_LIMIT:
+                    truncated = True
+                    break
+        if truncated:
+            break
+    if truncated:
+        flash(f'Найдено больше {SEARCH_LIMIT} — уточните запрос', 'warning')
     return render_template('search.html', files=files, folders=folders, q=q)
 
-# ── Trash ────────────────────────────────────────────────────────────────────
+# ── Корзина ───────────────────────────────────────────────────────────────────
 
 @files_bp.route('/trash')
 @login_required
 def trash():
-    items = FileMetadata.query.filter_by(
-        user_id=current_user.id,
-        is_deleted=True
-    ).order_by(FileMetadata.deleted_at.desc()).all()
+    items = TrashItem.query.filter_by(user_id=current_user.id).order_by(TrashItem.deleted_at.desc()).all()
     return render_template('trash.html', items=items)
+
+
+def _trash_item():
+    item = TrashItem.query.filter_by(id=request.form.get('item_id', type=int), user_id=current_user.id).first()
+    if not item:
+        flash('Элемент не найден', 'danger')
+    return item
+
 
 @files_bp.route('/restore', methods=['POST'])
 @login_required
 def restore():
-    item_id = request.form.get('item_id')
-    item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id).first()
-    if not item:
-        flash('Элемент не найден', 'danger')
-        return redirect(url_for('files.trash'))
-    item.is_deleted = False
-    item.deleted_at = None
-    db.session.commit()
-    flash(f'«{item.name}» восстановлен', 'success')
+    item = _trash_item()
+    if item:
+        folder = resolve(current_user, item.parent_path, must_exist=False)
+        os.makedirs(folder, exist_ok=True)
+        target = unique_path(folder, item.name)
+        shutil.move(os.path.join(_trash_dir(), item.trash_name), target)
+        db.session.delete(item)
+        db.session.commit()
+        flash(f'«{escape(os.path.basename(target))}» восстановлен в {escape(item.parent_path)}', 'success')
     return redirect(url_for('files.trash'))
+
+
+def _wipe(item):
+    p = os.path.join(_trash_dir(), item.trash_name)
+    if os.path.isdir(p):
+        shutil.rmtree(p, ignore_errors=True)
+    elif os.path.exists(p):
+        os.remove(p)
+    db.session.delete(item)
+
 
 @files_bp.route('/delete-permanent', methods=['POST'])
 @login_required
 def delete_permanent():
-    item_id = request.form.get('item_id')
-    item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id, is_deleted=True).first()
-    if not item:
-        flash('Элемент не найден', 'danger')
-        return redirect(url_for('files.trash'))
-    if not item.is_directory:
-        fp = get_user_storage_path(current_user.id, item.storage_name)
-        if os.path.exists(fp):
-            os.remove(fp)
-    db.session.delete(item)
-    db.session.commit()
-    flash(f'«{item.name}» удалён навсегда', 'success')
+    item = _trash_item()
+    if item:
+        _wipe(item)
+        db.session.commit()
+        flash(f'«{escape(item.name)}» удалён навсегда', 'success')
     return redirect(url_for('files.trash'))
+
 
 @files_bp.route('/empty-trash', methods=['POST'])
 @login_required
 def empty_trash():
-    items = FileMetadata.query.filter_by(user_id=current_user.id, is_deleted=True).all()
-    for item in items:
-        if not item.is_directory:
-            fp = get_user_storage_path(current_user.id, item.storage_name)
-            if os.path.exists(fp):
-                os.remove(fp)
-        db.session.delete(item)
+    for item in TrashItem.query.filter_by(user_id=current_user.id).all():
+        _wipe(item)
     db.session.commit()
     flash('Корзина очищена', 'success')
     return redirect(url_for('files.trash'))
 
-# ── Mkdir ─────────────────────────────────────────────────────────────────────
+# ── Новая папка ───────────────────────────────────────────────────────────────
 
 @files_bp.route('/mkdir', methods=['POST'])
 @login_required
 def mkdir():
-    current_path = request.args.get('path', '/')
+    current_path = _folder_arg()
+    folder = resolve(current_user, current_path)
+    name = request.form.get('folder_name', '').strip()
+    if bad_name(name):
+        flash(BAD_NAME_MSG, 'danger')
+        return _go(current_path)
     try:
-        current_path = normalize_path(current_path)
-    except ValueError:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files'))
-    folder_name = request.form.get('folder_name', '').strip()
-    if not folder_name:
-        flash('Введите имя папки', 'danger')
-        return redirect(url_for('files.list_files', path=current_path))
-    exists = FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=current_path,
-        name=folder_name, is_directory=True, is_deleted=False
-    ).first()
-    if exists:
+        os.mkdir(os.path.join(folder, name))
+        flash(f'Папка «{escape(name)}» создана', 'success')
+    except FileExistsError:
         flash('Папка с таким именем уже существует', 'danger')
-        return redirect(url_for('files.list_files', path=current_path))
-    folder = FileMetadata(
-        user_id=current_user.id, parent_path=current_path,
-        name=folder_name, storage_name=str(uuid.uuid4()),
-        size=0, is_directory=True, is_deleted=False
-    )
-    db.session.add(folder)
-    db.session.commit()
-    flash(f'Папка «{folder_name}» создана', 'success')
-    return redirect(url_for('files.list_files', path=current_path))
+    except OSError as e:
+        flash(f'Не удалось создать папку: {escape(e.strerror or e)}', 'danger')
+    return _go(current_path)
 
-# ── Upload ────────────────────────────────────────────────────────────────────
+# ── Загрузка ──────────────────────────────────────────────────────────────────
 
 @files_bp.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
-    current_path = request.args.get('path', '/')
-    try:
-        current_path = normalize_path(current_path)
-    except ValueError:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files'))
-    if 'file' not in request.files:
-        flash('Файл не выбран', 'danger')
-        return redirect(url_for('files.list_files', path=current_path))
-    uploaded = request.files.getlist('file')
-    count = 0
-    for file in uploaded:
-        if file.filename == '':
+    current_path = _folder_arg()
+    folder = resolve(current_user, current_path)
+    count, renamed = 0, []
+    for f in request.files.getlist('file'):
+        name = clean_name(f.filename)
+        if not name:
             continue
-        exists = FileMetadata.query.filter_by(
-            user_id=current_user.id, parent_path=current_path,
-            name=file.filename, is_deleted=False
-        ).first()
-        if exists:
-            flash(f'Файл «{file.filename}» уже существует', 'warning')
+        size = getattr(f, 'content_length', None) or 0
+        if not size:
+            try:
+                f.stream.seek(0, os.SEEK_END)
+                size = f.stream.tell()
+                f.stream.seek(0)
+            except (OSError, ValueError):
+                size = 0
+        if quota_exceeded_after_upload(current_user, size):
+            flash('Превышен лимит места на диске', 'danger')
             continue
-        storage_name = f"{uuid.uuid4()}_{file.filename}"
-        file_path = get_user_storage_path(current_user.id, storage_name)
-        file.save(file_path)
-        size = os.path.getsize(file_path)
-        metadata = FileMetadata(
-            user_id=current_user.id, parent_path=current_path,
-            name=file.filename, storage_name=storage_name,
-            size=size, is_directory=False, is_deleted=False
-        )
-        db.session.add(metadata)
+        target = unique_path(folder, name)
+        try:
+            f.save(target)
+        except OSError as e:
+            flash(f'Не удалось сохранить «{escape(name)}»: {escape(e.strerror or e)}', 'danger')
+            continue
         count += 1
-    db.session.commit()
+        _record('upload', to_vpath(current_user, target))
+        if os.path.basename(target) != name:
+            renamed.append(os.path.basename(target))
     if count:
         flash(f'Загружено файлов: {count}', 'success')
-    return redirect(url_for('files.list_files', path=current_path))
+    if renamed:
+        flash('Такие имена уже были, сохранено как: ' + ', '.join(escape(r) for r in renamed), 'warning')
+    db.session.commit()
+    return _go(current_path)
 
-# ── Download ──────────────────────────────────────────────────────────────────
+# ── Скачивание и просмотр ─────────────────────────────────────────────────────
+
+def _file_arg():
+    real = resolve(current_user, request.args.get('path', ''))
+    if not os.path.isfile(real):
+        abort(404)
+    return real
+
 
 @files_bp.route('/download')
 @login_required
 def download_file():
-    path = request.args.get('path', '')
-    if not path or path.endswith('/'):
-        flash('Укажите путь к файлу', 'danger')
-        return redirect(url_for('files.list_files'))
-    try:
-        name, parent = _parse_file_path(path)
-    except Exception:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files'))
-    file_record = FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=parent, name=name,
-        is_directory=False, is_deleted=False
-    ).first()
-    if not file_record:
-        flash('Файл не найден', 'danger')
-        return redirect(url_for('files.list_files', path=parent))
-    file_path = get_user_storage_path(current_user.id, file_record.storage_name)
-    if not os.path.exists(file_path):
-        flash('Файл отсутствует на сервере', 'danger')
-        return redirect(url_for('files.list_files', path=parent))
-    return send_file(file_path, download_name=file_record.name, as_attachment=True)
+    real = resolve(current_user, request.args.get('path', ''))
+    if not os.path.isfile(real) and not os.path.isdir(real):
+        abort(404)
+    if os.path.isdir(real):
+        import zipfile
+        archive = tempfile.NamedTemporaryFile(prefix='disk-', suffix='.zip', delete=False)
+        archive.close()
+        root = os.path.normcase(os.path.realpath(real))
+        try:
+            with zipfile.ZipFile(archive.name, 'w', compression=zipfile.ZIP_DEFLATED) as zipped:
+                for current, dirs, names in os.walk(real, followlinks=False):
+                    dirs[:] = [name for name in dirs
+                               if not is_hidden_name(name)
+                               and not os.path.islink(os.path.join(current, name))
+                               and not is_protected(os.path.join(current, name))]
+                    for name in names:
+                        path = os.path.join(current, name)
+                        if is_hidden_name(name) or os.path.islink(path) or is_protected(path):
+                            continue
+                        try:
+                            if os.path.isfile(path) and os.path.commonpath([root, os.path.normcase(os.path.realpath(path))]) == root:
+                                zipped.write(path, os.path.relpath(path, real))
+                        except (OSError, ValueError):
+                            continue
+            response = send_file(archive.name, download_name=os.path.basename(real) + '.zip', as_attachment=True)
+            response.call_on_close(lambda: os.path.exists(archive.name) and os.remove(archive.name))
+            return response
+        except Exception:
+            try:
+                os.remove(archive.name)
+            except OSError:
+                pass
+            raise
+    return send_file(real, download_name=os.path.basename(real), as_attachment=True)
 
-# ── Preview ───────────────────────────────────────────────────────────────────
 
 @files_bp.route('/preview')
 @login_required
 def preview_file():
-    path = request.args.get('path', '')
-    if not path or path.endswith('/'):
-        return 'Файл не указан', 400
-    try:
-        name, parent = _parse_file_path(path)
-    except Exception:
-        return 'Некорректный путь', 400
-    file_record = FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=parent, name=name,
-        is_directory=False, is_deleted=False
-    ).first()
-    if not file_record:
-        return 'Файл не найден', 404
-    file_path = get_user_storage_path(current_user.id, file_record.storage_name)
-    if not os.path.exists(file_path):
-        return 'Файл отсутствует на сервере', 404
-    return send_file(file_path, download_name=file_record.name, as_attachment=False)
+    real = _file_arg()
+    name = os.path.basename(real)
+    ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+    if ext in UNSAFE_INLINE:
+        # html/js показываем как текст, чтобы чужая страница не выполнялась внутри диска
+        resp = send_file(real, mimetype='text/plain; charset=utf-8', as_attachment=False)
+    else:
+        resp = send_file(real, download_name=name, as_attachment=False)
+    if ext == 'svg':
+        resp.headers['Content-Security-Policy'] = 'sandbox'
+    return resp
 
-# ── Delete (soft) ─────────────────────────────────────────────────────────────
+# ── Удаление (в корзину) ──────────────────────────────────────────────────────
 
 @files_bp.route('/delete', methods=['POST'])
 @login_required
 def delete_item():
-    path = request.args.get('path', '')
-    if not path:
-        flash('Укажите путь для удаления', 'danger')
-        return redirect(url_for('files.list_files'))
+    vpath = request.args.get('path', '')
+    real = resolve(current_user, vpath)
+    back = norm_vpath(to_vpath(current_user, os.path.dirname(real)), folder=True)
+    if is_locked(current_user, real):
+        flash('Эту папку удалить нельзя', 'danger')
+        return _go(back)
     try:
-        if path.endswith('/'):
-            current_path = normalize_path(path)
-            parts = current_path.strip('/').split('/')
-            parent = '/' + '/'.join(parts[:-1]) + '/' if len(parts) > 1 else '/'
-            folder_name = parts[-1]
-            folder = FileMetadata.query.filter_by(
-                user_id=current_user.id, parent_path=parent,
-                name=folder_name, is_directory=True, is_deleted=False
-            ).first()
-            if folder:
-                folder.is_deleted = True
-                folder.deleted_at = datetime.utcnow()
-                # Also soft-delete all children
-                children = FileMetadata.query.filter(
-                    FileMetadata.user_id == current_user.id,
-                    FileMetadata.parent_path.like(current_path + '%'),
-                    FileMetadata.is_deleted == False
-                ).all()
-                for child in children:
-                    child.is_deleted = True
-                    child.deleted_at = datetime.utcnow()
-            return_path = parent
-        else:
-            name, parent = _parse_file_path(path)
-            file_record = FileMetadata.query.filter_by(
-                user_id=current_user.id, parent_path=parent,
-                name=name, is_directory=False, is_deleted=False
-            ).first()
-            if file_record:
-                file_record.is_deleted = True
-                file_record.deleted_at = datetime.utcnow()
-            return_path = parent
-    except ValueError:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files'))
+        _to_trash(real)
+        db.session.commit()
+        flash('Перемещено в корзину', 'success')
+    except OSError as e:
+        flash(f'Не удалось удалить: {escape(e.strerror or e)}', 'danger')
+    return _go(back)
 
-    db.session.commit()
-    flash('Перемещено в корзину', 'success')
-    return redirect(url_for('files.list_files', path=return_path))
-
-# ── Rename ────────────────────────────────────────────────────────────────────
-
-@files_bp.route('/rename', methods=['POST'])
-@login_required
-def rename_item():
-    item_id = request.form.get('item_id')
-    new_name = request.form.get('new_name', '').strip()
-    return_path = request.form.get('return_path', '/')
-    if not new_name:
-        flash('Введите новое имя', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id, is_deleted=False).first()
-    if not item:
-        flash('Элемент не найден', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    old_name = item.name
-    # Check name conflict
-    conflict = FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=item.parent_path,
-        name=new_name, is_deleted=False
-    ).filter(FileMetadata.id != item.id).first()
-    if conflict:
-        flash('Элемент с таким именем уже существует', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    if item.is_directory:
-        old_path = item.parent_path + old_name + '/'
-        new_path = item.parent_path + new_name + '/'
-        # Update all children paths
-        children = FileMetadata.query.filter(
-            FileMetadata.user_id == current_user.id,
-            FileMetadata.parent_path.like(old_path + '%')
-        ).all()
-        for child in children:
-            child.parent_path = new_path + child.parent_path[len(old_path):]
-        # Also direct children
-        direct = FileMetadata.query.filter_by(
-            user_id=current_user.id, parent_path=old_path
-        ).all()
-        for child in direct:
-            child.parent_path = new_path
-    item.name = new_name
-    db.session.commit()
-    flash(f'Переименовано в «{new_name}»', 'success')
-    return redirect(url_for('files.list_files', path=return_path))
-
-# ── Copy ──────────────────────────────────────────────────────────────────────
-
-@files_bp.route('/copy', methods=['POST'])
-@login_required
-def copy_item():
-    item_id = request.form.get('item_id')
-    return_path = request.form.get('return_path', '/')
-    item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id, is_deleted=False).first()
-    if not item or item.is_directory:
-        flash('Можно копировать только файлы', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    # Generate unique copy name
-    base, ext = (item.name.rsplit('.', 1) if '.' in item.name else (item.name, ''))
-    copy_name = f"{base} — копия{'.' + ext if ext else ''}"
-    counter = 1
-    while FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=item.parent_path,
-        name=copy_name, is_deleted=False
-    ).first():
-        copy_name = f"{base} — копия {counter}{'.' + ext if ext else ''}"
-        counter += 1
-    # Copy physical file
-    src = get_user_storage_path(current_user.id, item.storage_name)
-    new_storage_name = f"{uuid.uuid4()}_{copy_name}"
-    dst = get_user_storage_path(current_user.id, new_storage_name)
-    if os.path.exists(src):
-        sh.copy2(src, dst)
-        size = os.path.getsize(dst)
-    else:
-        size = 0
-    new_item = FileMetadata(
-        user_id=current_user.id, parent_path=item.parent_path,
-        name=copy_name, storage_name=new_storage_name,
-        size=size, is_directory=False, is_deleted=False
-    )
-    db.session.add(new_item)
-    db.session.commit()
-    flash(f'Создана копия: «{copy_name}»', 'success')
-    return redirect(url_for('files.list_files', path=return_path))
-
-# ── Copy-to (with destination) ────────────────────────────────────────────────
-
-def _copy_folder(user_id, item, dest_path, new_name):
-    new_folder = FileMetadata(
-        user_id=user_id, parent_path=dest_path, name=new_name,
-        storage_name=str(uuid.uuid4()), size=0, is_directory=True, is_deleted=False
-    )
-    db.session.add(new_folder)
-    db.session.flush()
-    old_path = item.parent_path + item.name + '/'
-    new_path = dest_path + new_name + '/'
-    for child in FileMetadata.query.filter_by(user_id=user_id, parent_path=old_path, is_deleted=False).all():
-        if child.is_directory:
-            _copy_folder(user_id, child, new_path, child.name)
-        else:
-            src = get_user_storage_path(user_id, child.storage_name)
-            new_sn = f"{uuid.uuid4()}_{child.name}"
-            dst = get_user_storage_path(user_id, new_sn)
-            size = 0
-            if os.path.exists(src):
-                sh.copy2(src, dst)
-                size = os.path.getsize(dst)
-            db.session.add(FileMetadata(
-                user_id=user_id, parent_path=new_path, name=child.name,
-                storage_name=new_sn, size=size, is_directory=False, is_deleted=False
-            ))
-
-@files_bp.route('/copy-to', methods=['POST'])
-@login_required
-def copy_to():
-    item_id    = request.form.get('item_id')
-    dest_path  = request.form.get('dest_path', '/')
-    return_path = request.form.get('return_path', '/')
-    try:
-        dest_path = normalize_path(dest_path)
-    except ValueError:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id, is_deleted=False).first()
-    if not item:
-        flash('Элемент не найден', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    copy_name = item.name
-    if FileMetadata.query.filter_by(user_id=current_user.id, parent_path=dest_path, name=copy_name, is_deleted=False).first():
-        if item.is_directory:
-            base, ext = copy_name, ''
-        else:
-            parts = copy_name.rsplit('.', 1)
-            base, ext = (parts[0], '.' + parts[1]) if len(parts) == 2 else (copy_name, '')
-        copy_name = f"{base} — копия{ext}"
-        counter = 1
-        while FileMetadata.query.filter_by(user_id=current_user.id, parent_path=dest_path, name=copy_name, is_deleted=False).first():
-            copy_name = f"{base} — копия {counter}{ext}"
-            counter += 1
-    if item.is_directory:
-        _copy_folder(current_user.id, item, dest_path, copy_name)
-    else:
-        src = get_user_storage_path(current_user.id, item.storage_name)
-        new_sn = f"{uuid.uuid4()}_{copy_name}"
-        dst = get_user_storage_path(current_user.id, new_sn)
-        size = 0
-        if os.path.exists(src):
-            sh.copy2(src, dst); size = os.path.getsize(dst)
-        db.session.add(FileMetadata(
-            user_id=current_user.id, parent_path=dest_path, name=copy_name,
-            storage_name=new_sn, size=size, is_directory=False, is_deleted=False
-        ))
-    db.session.commit()
-    flash(f'Скопировано: «{copy_name}»', 'success')
-    return redirect(url_for('files.list_files', path=return_path))
-
-# ── Folders list (for move picker) ───────────────────────────────────────────
-
-@files_bp.route('/folders-list')
-@login_required
-def folders_list():
-    folders = FileMetadata.query.filter_by(
-        user_id=current_user.id, is_directory=True, is_deleted=False
-    ).order_by(FileMetadata.parent_path, FileMetadata.name).all()
-    result = [{'id': f.id, 'name': f.name, 'path': f.parent_path + f.name + '/'}
-              for f in folders]
-    result.insert(0, {'id': 0, 'name': 'Файлы (корень)', 'path': '/'})
-    return jsonify(result)
-
-# ── Move ──────────────────────────────────────────────────────────────────────
-
-@files_bp.route('/move', methods=['POST'])
-@login_required
-def move_item():
-    item_id = request.form.get('item_id')
-    dest_path = request.form.get('dest_path', '/')
-    return_path = request.form.get('return_path', '/')
-    try:
-        dest_path = normalize_path(dest_path)
-    except ValueError:
-        flash('Некорректный путь назначения', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    item = FileMetadata.query.filter_by(
-        id=item_id, user_id=current_user.id, is_deleted=False
-    ).first()
-    if not item:
-        flash('Элемент не найден', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    if item.parent_path == dest_path:
-        flash('Элемент уже находится в этой папке', 'warning')
-        return redirect(url_for('files.list_files', path=return_path))
-    # Prevent moving a folder into itself
-    if item.is_directory:
-        item_full = item.parent_path + item.name + '/'
-        if dest_path.startswith(item_full):
-            flash('Нельзя переместить папку внутрь самой себя', 'danger')
-            return redirect(url_for('files.list_files', path=return_path))
-    # Name conflict check
-    conflict = FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=dest_path,
-        name=item.name, is_deleted=False
-    ).first()
-    if conflict:
-        flash(f'В папке назначения уже есть элемент «{item.name}»', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
-    if item.is_directory:
-        old_path = item.parent_path + item.name + '/'
-        new_path = dest_path + item.name + '/'
-        # Update all nested children
-        children = FileMetadata.query.filter(
-            FileMetadata.user_id == current_user.id,
-            FileMetadata.parent_path.like(old_path + '%')
-        ).all()
-        for child in children:
-            child.parent_path = new_path + child.parent_path[len(old_path):]
-        direct = FileMetadata.query.filter_by(
-            user_id=current_user.id, parent_path=old_path
-        ).all()
-        for child in direct:
-            child.parent_path = new_path
-    item.parent_path = dest_path
-    db.session.commit()
-    flash(f'«{item.name}» перемещён', 'success')
-    return redirect(url_for('files.list_files', path=return_path))
-
-# ── Share ─────────────────────────────────────────────────────────────────────
-
-@files_bp.route('/share', methods=['POST'])
-@login_required
-def share_file():
-    path = request.args.get('path', '')
-    if not path or path.endswith('/'):
-        flash('Можно поделиться только файлом', 'danger')
-        return redirect(url_for('files.list_files'))
-    try:
-        name, parent = _parse_file_path(path)
-    except Exception:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files'))
-    file_record = FileMetadata.query.filter_by(
-        user_id=current_user.id, parent_path=parent, name=name,
-        is_directory=False, is_deleted=False
-    ).first()
-    if not file_record:
-        flash('Файл не найден', 'danger')
-        return redirect(url_for('files.list_files', path=parent))
-    token = str(uuid.uuid4())
-    expires_at = datetime.utcnow() + timedelta(days=7)
-    share = ShareLink(file_id=file_record.id, token=token, expires_at=expires_at)
-    db.session.add(share)
-    db.session.commit()
-    share_url = url_for('public.download_shared', token=token, _external=True)
-    flash(f'Ссылка создана: <a href="{share_url}" target="_blank" style="word-break:break-all">{share_url}</a>', 'success')
-    return redirect(url_for('files.list_files', path=parent))
-
-# ── Batch delete ──────────────────────────────────────────────────────────────
 
 @files_bp.route('/delete-batch', methods=['POST'])
 @login_required
 def delete_batch():
-    ids = request.form.getlist('ids[]')
     count = 0
-    for item_id in ids:
-        item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id, is_deleted=False).first()
-        if item:
-            item.is_deleted = True
-            item.deleted_at = datetime.utcnow()
+    for vpath in request.form.getlist('ids[]'):
+        real = resolve(current_user, vpath)
+        if is_locked(current_user, real):
+            continue
+        try:
+            _to_trash(real)
             count += 1
+        except OSError:
+            pass
     db.session.commit()
     flash(f'Перемещено в корзину: {count} эл.', 'success')
-    return_path = request.form.get('return_path', '/')
-    return redirect(url_for('files.list_files', path=return_path))
+    return _go(_form_path('return_path', folder=True))
 
-# ── Batch move ────────────────────────────────────────────────────────────────
+# ── Переименование ────────────────────────────────────────────────────────────
+
+@files_bp.route('/rename', methods=['POST'])
+@login_required
+def rename_item():
+    return_path = _form_path('return_path', folder=True)
+    real = resolve(current_user, request.form.get('item_id', ''))
+    new_name = request.form.get('new_name', '').strip()
+    if bad_name(new_name):
+        flash(BAD_NAME_MSG, 'danger')
+    elif is_locked(current_user, real):
+        flash('Эту папку переименовать нельзя', 'danger')
+    else:
+        target = os.path.join(os.path.dirname(real), new_name)
+        if os.path.exists(target) and os.path.normcase(target) != os.path.normcase(real):
+            flash('Элемент с таким именем уже существует', 'danger')
+        else:
+            try:
+                os.rename(real, target)
+                flash(f'Переименовано в «{escape(new_name)}»', 'success')
+            except OSError as e:
+                flash(f'Не удалось переименовать: {escape(e.strerror or e)}', 'danger')
+    return _go(return_path)
+
+# ── Копирование ───────────────────────────────────────────────────────────────
+
+def _copy(src, dest_folder):
+    target = os.path.join(dest_folder, os.path.basename(src))
+    if os.path.exists(target):
+        base, ext = (os.path.splitext(os.path.basename(src)) if os.path.isfile(src)
+                     else (os.path.basename(src), ''))
+        target = unique_path(dest_folder, f'{base} — копия{ext}')
+    if os.path.isdir(src):
+        if os.path.normcase(dest_folder + os.sep).startswith(os.path.normcase(src + os.sep)):
+            raise ValueError('Нельзя копировать папку внутрь самой себя')
+        shutil.copytree(src, target)
+    else:
+        shutil.copy2(src, target)
+    return os.path.basename(target)
+
+
+@files_bp.route('/copy', methods=['POST'])
+@login_required
+def copy_item():
+    return_path = _form_path('return_path', folder=True)
+    src = resolve(current_user, request.form.get('item_id', ''))
+    try:
+        name = _copy(src, os.path.dirname(src))
+        flash(f'Создана копия: «{escape(name)}»', 'success')
+    except (OSError, ValueError) as e:
+        flash(f'Не удалось скопировать: {escape(e)}', 'danger')
+    return _go(return_path)
+
+
+@files_bp.route('/copy-to', methods=['POST'])
+@login_required
+def copy_to():
+    return_path = _form_path('return_path', folder=True)
+    src = resolve(current_user, request.form.get('item_id', ''))
+    dest = resolve(current_user, _form_path('dest_path', folder=True))
+    try:
+        name = _copy(src, dest)
+        flash(f'Скопировано: «{escape(name)}»', 'success')
+    except (OSError, ValueError) as e:
+        flash(f'Не удалось скопировать: {escape(e)}', 'danger')
+    return _go(return_path)
+
+# ── Список папок для окна «Переместить/Копировать» ───────────────────────────
+
+@files_bp.route('/folders-list')
+@login_required
+def folders_list():
+    """Только вложенные папки указанной (диск может быть большим)."""
+    base = _folder_arg()
+    real = resolve(current_user, base)
+    items = list_dir(current_user, real) or []
+    return jsonify([{'name': e.name, 'path': base + e.name + '/'} for e in items if e.is_directory])
+
+# ── Перемещение ───────────────────────────────────────────────────────────────
+
+@files_bp.route('/move', methods=['POST'])
+@login_required
+def move_item():
+    return_path = _form_path('return_path', folder=True)
+    src = resolve(current_user, request.form.get('item_id', ''))
+    dest = resolve(current_user, _form_path('dest_path', folder=True))
+    try:
+        error = _move(src, dest)
+    except OSError as e:
+        error = f'Не удалось переместить: {escape(e.strerror or e)}'
+    flash(error or f'«{escape(os.path.basename(src))}» перемещён', 'danger' if error else 'success')
+    return _go(return_path)
+
 
 @files_bp.route('/move-batch', methods=['POST'])
 @login_required
 def move_batch():
-    ids = request.form.getlist('ids[]')
-    dest_path = request.form.get('dest_path', '/')
-    return_path = request.form.get('return_path', '/')
-    try:
-        dest_path = normalize_path(dest_path)
-    except ValueError:
-        flash('Некорректный путь', 'danger')
-        return redirect(url_for('files.list_files', path=return_path))
+    return_path = _form_path('return_path', folder=True)
+    dest = resolve(current_user, _form_path('dest_path', folder=True))
     count = 0
-    for item_id in ids:
-        item = FileMetadata.query.filter_by(id=item_id, user_id=current_user.id, is_deleted=False).first()
-        if not item or item.parent_path == dest_path:
-            continue
-        if item.is_directory:
-            old_path = item.parent_path + item.name + '/'
-            new_path = dest_path + item.name + '/'
-            if dest_path.startswith(old_path):
-                continue
-            children = FileMetadata.query.filter(
-                FileMetadata.user_id == current_user.id,
-                FileMetadata.parent_path.like(old_path + '%')
-            ).all()
-            for child in children:
-                child.parent_path = new_path + child.parent_path[len(old_path):]
-            for child in FileMetadata.query.filter_by(user_id=current_user.id, parent_path=old_path).all():
-                child.parent_path = new_path
-        item.parent_path = dest_path
-        count += 1
-    db.session.commit()
+    for vpath in request.form.getlist('ids[]'):
+        src = resolve(current_user, vpath)
+        try:
+            error = _move(src, dest)
+        except OSError as e:
+            error = escape(e.strerror or e)
+        if error:
+            flash(error, 'danger')
+        else:
+            count += 1
     flash(f'Перемещено: {count} эл.', 'success')
-    return redirect(url_for('files.list_files', path=return_path))
+    return _go(return_path)
 
-# ── Disk space API ────────────────────────────────────────────────────────────
+# ── Публичная ссылка ──────────────────────────────────────────────────────────
+
+@files_bp.route('/share', methods=['POST'])
+@login_required
+def share_file():
+    real = resolve(current_user, request.form.get('path', request.args.get('path', '')))
+    if not os.path.isfile(real) and not os.path.isdir(real):
+        abort(404)
+    days = request.form.get('expires_days', '7')
+    try:
+        days = int(days)
+    except ValueError:
+        days = 7
+    expires = None if days == 0 else datetime.utcnow() + timedelta(days=max(1, days))
+    share = Share(user_id=current_user.id, path=to_vpath(current_user, real),
+                  token=uuid.uuid4().hex, expires_at=expires,
+                  allow_download=request.form.get('allow_download') == '1')
+    db.session.add(share)
+    db.session.commit()
+    url = url_for('public.browse_shared', token=share.token, _external=True)
+    flash(f'Ссылка создана: <a href="{url}" target="_blank" style="word-break:break-all">{url}</a>', 'success')
+    return _go(norm_vpath(os.path.dirname(share.path), folder=True))
+
+# ── Место на диске ────────────────────────────────────────────────────────────
+
+@files_bp.route('/shares')
+@login_required
+def shares():
+    links = Share.query.filter_by(user_id=current_user.id).order_by(Share.created_at.desc()).all()
+    return render_template('shares.html', links=links)
+
+@files_bp.route('/shares/<int:share_id>/delete', methods=['POST'])
+@login_required
+def delete_share(share_id):
+    share = Share.query.filter_by(id=share_id, user_id=current_user.id).first_or_404()
+    db.session.delete(share)
+    db.session.commit()
+    flash('Публичная ссылка отключена', 'success')
+    return redirect(url_for('files.shares'))
 
 @files_bp.route('/api/disk-space')
 @login_required
 def api_disk_space():
-    usage = sh.disk_usage('/')
+    usage = shutil.disk_usage(user_home(current_user))
     return jsonify({'free': usage.free, 'total': usage.total, 'used': usage.used})

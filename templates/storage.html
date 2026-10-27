@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Хранилище — {{ disk_name }}{% endblock %}
+
+{% block extra_styles %}
+.st-card { max-width: 640px; background: #fff; border-radius: 16px; border: 1px solid var(--yd-border); padding: 22px 24px; }
+.st-card h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.st-card p { font-size: 13.5px; color: #5C5A55; line-height: 1.6; margin-bottom: 12px; }
+.st-input { width: 100%; border: 1.5px solid var(--yd-border); border-radius: 10px; padding: 10px 14px; font-size: 15px; font-family: Consolas, monospace; outline: none; }
+.st-input:focus { border-color: var(--c-primary); box-shadow: 0 0 0 3px rgba(255,204,0,.25); }
+.st-now { display: flex; align-items: center; gap: 10px; background: var(--yd-yellow-light); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 14px; }
+.st-now i { font-size: 22px; color: #C99700; }
+.st-now code { font-size: 14px; color: var(--yd-text); }
+{% endblock %}
+
+{% block main %}
+<div class="yd-main-head">
+    <span class="yd-main-title"><i class="bi bi-hdd-fill" style="color:#E0A800"></i> Хранилище</span>
+</div>
+<div class="yd-content">
+<div class="st-card">
+    {% if current %}
+    <div class="st-now"><i class="bi bi-hdd-fill"></i><div>Сейчас файлы хранятся в <code>{{ current }}</code></div></div>
+    {% endif %}
+    <h2>Где хранить файлы</h2>
+    <p>Укажите диск или папку. <b>Администраторы</b> видят на сайте всё, что в ней лежит, и могут это менять.
+       <b>Обычные пользователи</b> видят только свои папки внутри <code>{{ config.USERS_FOLDER }}</code>.
+       Папка самой программы на сайте скрыта.</p>
+    {% if from_env %}
+    <p><i class="bi bi-info-circle-fill" style="color:#E0A800"></i> Путь задан в файле <code>.env</code> (STORAGE_DIR). Чтобы изменить его, поправьте этот файл и перезапустите диск.</p>
+    {% else %}
+    <form method="POST">
+        <input class="st-input" name="storage_root" value="{{ suggested }}" placeholder="D:\" required>
+        <p style="margin-top:8px;font-size:12.5px;">Примеры: <code>D:\</code> — весь диск D, <code>D:\Общее</code> — одна папка. Если папки нет, она будет создана.</p>
+        <button type="submit" class="yd-btn-upload" style="width:auto;padding:10px 22px;"><i class="bi bi-check-lg"></i> Сохранить</button>
+    </form>
+    {% endif %}
+</div>
+</div>
+{% endblock %}
