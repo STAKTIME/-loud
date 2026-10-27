@@ -1,5 +1,5 @@
 import shutil
-from flask import Flask, redirect, url_for, render_template
+from flask import Flask, redirect, url_for, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_required
 from config import Config
@@ -42,12 +42,20 @@ def create_app():
     def help():
         return render_template('help.html')
 
+    # Эти обработчики перекрывают обработчики public_bp, поэтому для /public/
+    # отдаём понятную страницу для гостя по ссылке.
+    from app.public import public_error
+
     @app.errorhandler(403)
     def forbidden(e):
+        if request.path.startswith('/public/'):
+            return public_error(e)
         return render_template('error.html', code=403, text='Этот раздел только для администратора'), 403
 
     @app.errorhandler(404)
     def not_found(e):
+        if request.path.startswith('/public/'):
+            return public_error(e)
         return render_template('error.html', code=404, text='Такой страницы нет'), 404
 
     @app.errorhandler(413)
@@ -111,5 +119,12 @@ def create_app():
             if 'allow_download' not in columns:
                 with db.engine.begin() as conn:
                     conn.execute(text('ALTER TABLE shares ADD COLUMN allow_download BOOLEAN NOT NULL DEFAULT 1'))
+        # Записи удалённых пользователей (старые версии их не чистили): иначе новый
+        # пользователь с тем же id получил бы чужие альбомы, ссылки и историю.
+        with db.engine.begin() as conn:
+            conn.execute(text('DELETE FROM album_items WHERE album_id NOT IN '
+                              '(SELECT a.id FROM albums a JOIN users u ON u.id = a.user_id)'))
+            for table in ('albums', 'activities', 'shares'):
+                conn.execute(text(f'DELETE FROM {table} WHERE user_id NOT IN (SELECT id FROM users)'))
 
     return app

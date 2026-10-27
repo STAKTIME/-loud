@@ -84,6 +84,7 @@
             color: var(--yd-text); text-decoration: none; font-size: 14px;
             transition: background .15s; white-space: nowrap;
         }
+        button.yd-nav-item { width: 100%; border: 0; background: none; font-family: inherit; text-align: left; cursor: pointer; }
         .yd-nav-item:hover { background: var(--yd-hover); color: var(--yd-text); }
         .yd-nav-item.active { background: var(--yd-active); font-weight: 600; }
         .yd-nav-ico {
@@ -415,7 +416,7 @@
                href="{{ url_for('admin.storage') }}">
                 <span class="yd-nav-ico"><i class="bi bi-hdd-fill"></i></span> Хранилище
             </a>
-            <button type="button" class="yd-nav-item" onclick="bootstrap.Modal.getOrCreateInstance(document.getElementById('resetSetupModal')).show()">
+            <button type="button" class="yd-nav-item" onclick="openResetSetup()">
                 <span class="yd-nav-ico"><i class="bi bi-arrow-counterclockwise"></i></span> Настроить заново
             </button>
             {% endif %}
@@ -1053,7 +1054,56 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% if current_user.is_admin %}
-<div class="modal fade" id="resetSetupModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2" style="color:#E0A800"></i>Настроить заново?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0">Все пользователи, альбомы, ссылки и корзина будут удалены, и диск предложит пройти первый запуск заново. <b>Сами файлы в хранилище останутся на месте.</b></p></div><div class="modal-footer"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><form method="POST" action="{{ url_for('admin.reset_setup') }}" style="margin:0"><button type="submit" class="btn btn-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Сбросить настройки</button></form></div></div></div></div></div>
+<div class="modal fade" id="resetSetupModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <form method="POST" action="{{ url_for('admin.reset_setup') }}" class="modal-content" onsubmit="return resetStep === 3">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2" style="color:#E0A800"></i><span id="resetTitle"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0" data-step="1">Все пользователи, альбомы, ссылки и корзина будут удалены, и диск предложит пройти первый запуск заново. <b>Сами файлы в хранилище останутся на месте.</b></p>
+        <p class="mb-0" data-step="2">Это действие <b>нельзя отменить</b>. Всем пользователям придётся заново получить пароли. Продолжить?</p>
+        <div data-step="3">
+          <label class="form-label" for="resetPassword" style="font-size:13px;font-weight:600">Введите ваш пароль администратора</label>
+          <input class="form-control" type="password" name="password" id="resetPassword" autocomplete="current-password">
+        </div>
+      </div>
+      <div class="modal-footer" style="gap:8px">
+        <button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="yd-btn-upload" style="width:auto;padding:8px 16px" id="resetNext" onclick="resetNextStep()"></button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+let resetStep = 1;
+const RESET_STEPS = {1: ['Настроить заново?', 'Да, сбросить'],
+                     2: ['Точно сбросить всё?', 'Да, точно'],
+                     3: ['Подтвердите паролем', 'Сбросить настройки']};
+function showResetStep(n) {
+    resetStep = n;
+    document.querySelectorAll('#resetSetupModal [data-step]').forEach(el => el.style.display = el.dataset.step == n ? '' : 'none');
+    document.getElementById('resetTitle').textContent = RESET_STEPS[n][0];
+    document.getElementById('resetNext').innerHTML = '<i class="bi bi-arrow-counterclockwise"></i> ' + RESET_STEPS[n][1];
+    const pw = document.getElementById('resetPassword');
+    pw.required = n === 3;
+    if (n === 3) setTimeout(() => pw.focus(), 50);
+}
+function openResetSetup() {
+    document.getElementById('resetPassword').value = '';
+    showResetStep(1);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('resetSetupModal')).show();
+}
+function resetNextStep() {
+    if (resetStep < 3) return showResetStep(resetStep + 1);
+    const form = document.querySelector('#resetSetupModal form');
+    if (form.reportValidity()) form.submit();
+}
+document.getElementById('resetPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); resetNextStep(); }
+});
+</script>
 {% endif %}
 {% block scripts %}{% endblock %}
 </body>

@@ -9,7 +9,7 @@ from markupsafe import escape
 from app import db
 from app.models import TrashItem, Share, Album, AlbumItem, Activity
 from app.storage import (resolve, list_dir, to_vpath, norm_vpath, is_locked, clean_name, bad_name,
-                         unique_path, folder_size, user_home, is_hidden_name, is_protected, Entry, BAD_NAME_MSG, quota_exceeded, quota_exceeded_after_upload)
+                         unique_path, folder_size, user_home, is_hidden_name, is_protected, Entry, BAD_NAME_MSG, quota_exceeded)
 
 files_bp = Blueprint('files', __name__)
 
@@ -51,6 +51,7 @@ def _to_trash(real):
                      deleted_at=datetime.utcnow())
     shutil.move(real, os.path.join(_trash_dir(), item.trash_name))
     db.session.add(item)
+    _record('delete', to_vpath(current_user, real))
 
 
 def _move(src, dest_folder):
@@ -64,39 +65,90 @@ def _move(src, dest_folder):
     target = os.path.join(dest_folder, os.path.basename(src))
     if os.path.exists(target):
         return f'В папке назначения уже есть «{escape(os.path.basename(src))}»'
+    old_vpath = to_vpath(current_user, src)
     shutil.move(src, target)
+    new_vpath = to_vpath(current_user, target)
+    _repath(old_vpath, new_vpath)
+    _record('move', new_vpath)
     return None
 
 # ── Альбомы и история ────────────────────────────────────────────────────────
 IMAGE_EXTS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'}
+ACTION_NAMES = {'upload': 'Загрузка', 'mkdir': 'Новая папка', 'delete': 'В корзину', 'restore': 'Восстановлено',
+                'rename': 'Переименование', 'move': 'Перемещение', 'copy': 'Копирование'}
+
 
 def _record(action, path=None):
     db.session.add(Activity(user_id=current_user.id, action=action, path=path))
 
-def _user_images():
-    home = resolve(current_user, '/')
-    result = []
-    for root, dirs, names in os.walk(home):
-        dirs[:] = [d for d in dirs if not is_hidden_name(d) and not is_protected(os.path.join(root, d))]
-        for name in names:
-            if name.rsplit('.', 1)[-1].lower() in IMAGE_EXTS:
-                result.append(to_vpath(current_user, os.path.join(root, name)))
-    return sorted(result)
+
+def _is_image(name):
+    return '.' in name and name.rsplit('.', 1)[-1].lower() in IMAGE_EXTS
 
 
-def _user_folders():
-    home = resolve(current_user, '/')
-    result = ['/']
-    for root, dirs, _ in os.walk(home):
-        dirs[:] = [d for d in dirs if not is_hidden_name(d) and not is_protected(os.path.join(root, d))]
-        for name in dirs:
-            result.append(to_vpath(current_user, os.path.join(root, name)) + '/')
-    return sorted(set(result), key=lambda path: (path.count('/'), path.lower()))
+def _repath(old_vpath, new_vpath):
+    """После переименования/переноса поправляет пути в ссылках и альбомах текущего пользователя."""
+    old_vpath, new_vpath = old_vpath.rstrip('/'), new_vpath.rstrip('/')
+    if not old_vpath or old_vpath == new_vpath:
+        return
+    prefix = old_vpath + '/'
+
+    def fix(p):
+        if p == old_vpath:
+            return new_vpath
+        if p.startswith(prefix):
+            return new_vpath + '/' + p[len(prefix):]
+        return None
+
+    for share in Share.query.filter_by(user_id=current_user.id).all():
+        new = fix(share.path)
+        if new:
+            share.path = new
+    album_ids = [a.id for a in Album.query.filter_by(user_id=current_user.id).all()]
+    if album_ids:
+        for item in AlbumItem.query.filter(AlbumItem.album_id.in_(album_ids)).all():
+            new = fix(item.path)
+            if new:
+                item.path = new
+
+
+def _upload_size(f):
+    size = getattr(f, 'content_length', None) or 0
+    if not size:
+        try:
+            f.stream.seek(0, os.SEEK_END)
+            size = f.stream.tell()
+            f.stream.seek(0)
+        except (OSError, ValueError):
+            size = 0
+    return size
+
+
+def _my_album(album_id):
+    return Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
+
+
+def _album_items(album):
+    """Записи альбома, у которых файл ещё существует."""
+    items = []
+    for item in AlbumItem.query.filter_by(album_id=album.id).order_by(AlbumItem.id).all():
+        try:
+            if os.path.isfile(resolve(current_user, item.path)):
+                items.append(item)
+        except Exception:
+            continue
+    return items
+
 
 @files_bp.route('/albums')
 @login_required
 def albums():
-    return render_template('albums.html', albums=Album.query.filter_by(user_id=current_user.id).order_by(Album.created_at.desc()).all())
+    rows = []
+    for album in Album.query.filter_by(user_id=current_user.id).order_by(Album.created_at.desc()).all():
+        items = _album_items(album)
+        rows.append({'album': album, 'count': len(items), 'cover': items[0].path if items else None})
+    return render_template('albums.html', albums=rows)
+
 
 @files_bp.route('/albums/create', methods=['POST'])
 @login_required
@@ -104,38 +156,96 @@ def create_album():
     name = request.form.get('name', '').strip()
     if bad_name(name):
         flash(BAD_NAME_MSG, 'danger')
+        return redirect(url_for('files.albums'))
+    album = Album(user_id=current_user.id, name=name)
+    db.session.add(album)
+    db.session.commit()
+    flash('Альбом создан — добавьте в него фотографии', 'success')
+    return redirect(url_for('files.album_view', album_id=album.id))
+
+
+@files_bp.route('/albums/<int:album_id>')
+@login_required
+def album_view(album_id):
+    album = _my_album(album_id)
+    return render_template('album.html', album=album, items=_album_items(album),
+                           upload_folder='/Альбомы/' + album.name + '/')
+
+
+@files_bp.route('/albums/<int:album_id>/rename', methods=['POST'])
+@login_required
+def rename_album(album_id):
+    album = _my_album(album_id)
+    name = request.form.get('name', '').strip()
+    if bad_name(name):
+        flash(BAD_NAME_MSG, 'danger')
     else:
-        db.session.add(Album(user_id=current_user.id, name=name))
+        album.name = name
         db.session.commit()
-        flash('Альбом создан', 'success')
+        flash('Альбом переименован', 'success')
+    return redirect(url_for('files.album_view', album_id=album.id))
+
+
+@files_bp.route('/albums/<int:album_id>/delete', methods=['POST'])
+@login_required
+def delete_album(album_id):
+    album = _my_album(album_id)
+    AlbumItem.query.filter_by(album_id=album.id).delete()
+    Share.query.filter_by(user_id=current_user.id, path='@album:' + str(album.id)).delete()
+    db.session.delete(album)
+    db.session.commit()
+    flash(f'Альбом «{escape(album.name)}» удалён. Сами фотографии остались на диске.', 'success')
     return redirect(url_for('files.albums'))
+
+
+@files_bp.route('/albums/<int:album_id>/remove', methods=['POST'])
+@login_required
+def album_remove(album_id):
+    album = _my_album(album_id)
+    ids = request.form.getlist('item_id', type=int)
+    if ids:
+        AlbumItem.query.filter(AlbumItem.album_id == album.id, AlbumItem.id.in_(ids)).delete(synchronize_session=False)
+        db.session.commit()
+        flash(f'Убрано из альбома: {len(ids)}. Файлы остались на диске.', 'success')
+    return redirect(url_for('files.album_view', album_id=album.id))
+
+
+@files_bp.route('/albums/<int:album_id>/add', methods=['POST'])
+@login_required
+def album_add(album_id):
+    album = _my_album(album_id)
+    added = 0
+    existing = {i.path for i in AlbumItem.query.filter_by(album_id=album.id).all()}
+    for path in request.form.getlist('paths') or request.form.getlist('paths[]'):
+        try:
+            vpath = norm_vpath(path)
+            real = resolve(current_user, vpath)
+        except Exception:
+            continue
+        if os.path.isfile(real) and _is_image(real) and vpath not in existing:
+            db.session.add(AlbumItem(album_id=album.id, path=vpath))
+            existing.add(vpath)
+            added += 1
+    db.session.commit()
+    flash(f'Добавлено фото: {added}' if added else 'Новых фото не выбрано', 'success' if added else 'warning')
+    return redirect(url_for('files.album_view', album_id=album.id))
+
 
 @files_bp.route('/albums/<int:album_id>/upload', methods=['POST'])
 @login_required
 def album_upload(album_id):
-    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
-    try:
-        dest_path = norm_vpath(request.form.get('dest_path', '/'), folder=True)
-    except ValueError:
-        abort(404)
-    target_folder = resolve(current_user, dest_path)
-    if not os.path.isdir(target_folder):
-        abort(404)
+    """Новые фото сохраняются в папку «Альбомы/<имя альбома>» и сразу попадают в альбом."""
+    album = _my_album(album_id)
+    target_folder = resolve(current_user, '/Альбомы/' + album.name + '/', must_exist=False)
+    count = 0
     for f in request.files.getlist('photos'):
         name = clean_name(f.filename)
-        if not name or name.rsplit('.', 1)[-1].lower() not in IMAGE_EXTS:
+        if not name or not _is_image(name):
             continue
-        size = getattr(f, 'content_length', None) or 0
-        if not size:
-            try:
-                f.stream.seek(0, os.SEEK_END)
-                size = f.stream.tell()
-                f.stream.seek(0)
-            except (OSError, ValueError):
-                size = 0
-        if quota_exceeded_after_upload(current_user, size):
+        if quota_exceeded(current_user, _upload_size(f)):
             flash('Превышен лимит места на диске', 'danger')
-            continue
+            break
+        os.makedirs(target_folder, exist_ok=True)
         target = unique_path(target_folder, name)
         try:
             f.save(target)
@@ -145,56 +255,54 @@ def album_upload(album_id):
         path = to_vpath(current_user, target)
         db.session.add(AlbumItem(album_id=album.id, path=path))
         _record('upload', path)
+        count += 1
     db.session.commit()
+    if count:
+        flash(f'Загружено в альбом: {count}', 'success')
     return redirect(url_for('files.album_view', album_id=album.id))
+
 
 @files_bp.route('/albums/<int:album_id>/share', methods=['POST'])
 @login_required
 def share_album(album_id):
-    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
+    album = _my_album(album_id)
     days = request.form.get('expires_days', '7')
-    try: days = int(days)
-    except ValueError: days = 7
+    try:
+        days = int(days)
+    except ValueError:
+        days = 7
     expires = None if days == 0 else datetime.utcnow() + timedelta(days=max(1, days))
-    share = Share(user_id=current_user.id, path='@album:' + str(album.id), token=uuid.uuid4().hex, expires_at=expires, allow_download=request.form.get('allow_download') == '1')
-    db.session.add(share); db.session.commit()
-    flash('Ссылка на альбом создана: ' + url_for('public.browse_shared', token=share.token, _external=True), 'success')
-    return redirect(url_for('files.album_view', album_id=album.id))
-
-@files_bp.route('/albums/<int:album_id>')
-@login_required
-def album_view(album_id):
-    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
-    items = AlbumItem.query.filter_by(album_id=album.id).all()
-    valid = []
-    for item in items:
-        try:
-            if os.path.isfile(resolve(current_user, item.path)):
-                valid.append(item)
-        except Exception:
-            continue
-    return render_template('album.html', album=album, paths=[i.path for i in valid], available=_user_images(), folders=_user_folders())
-
-@files_bp.route('/albums/<int:album_id>/add', methods=['POST'])
-@login_required
-def album_add(album_id):
-    album = Album.query.filter_by(id=album_id, user_id=current_user.id).first_or_404()
-    selected_paths = request.form.getlist('paths') or request.form.getlist('paths[]')
-    for path in selected_paths:
-        try:
-            real = resolve(current_user, path)
-            if os.path.isfile(real) and os.path.splitext(real)[1][1:].lower() in IMAGE_EXTS:
-                if not AlbumItem.query.filter_by(album_id=album.id, path=norm_vpath(path)).first():
-                    db.session.add(AlbumItem(album_id=album.id, path=norm_vpath(path)))
-        except Exception:
-            continue
+    share = Share(user_id=current_user.id, path='@album:' + str(album.id), token=uuid.uuid4().hex,
+                  expires_at=expires, allow_download=request.form.get('allow_download') == '1')
+    db.session.add(share)
     db.session.commit()
+    url = url_for('public.browse_shared', token=share.token, _external=True)
+    flash(f'Ссылка на альбом создана: <a href="{url}" target="_blank" style="word-break:break-all">{url}</a>', 'success')
     return redirect(url_for('files.album_view', album_id=album.id))
+
+
+@files_bp.route('/images-list')
+@login_required
+def images_list():
+    """Для окна выбора фото: вложенные папки и картинки одной папки (без обхода всего диска)."""
+    base = _folder_arg()
+    real = resolve(current_user, base)
+    items = list_dir(current_user, real) or []
+    return jsonify({
+        'path': base,
+        'folders': [{'name': e.name, 'path': base + e.name + '/'} for e in items if e.is_directory],
+        'images': [{'name': e.name, 'path': base + e.name,
+                    'thumb': url_for('files.preview_file', path=base + e.name)}
+                   for e in items if not e.is_directory and _is_image(e.name)],
+    })
+
 
 @files_bp.route('/history')
 @login_required
 def history():
-    return render_template('history.html', activities=Activity.query.filter_by(user_id=current_user.id).order_by(Activity.created_at.desc()).limit(300).all())
+    activities = (Activity.query.filter_by(user_id=current_user.id)
+                  .order_by(Activity.created_at.desc()).limit(300).all())
+    return render_template('history.html', activities=activities, names=ACTION_NAMES)
 
 # ── Список файлов ─────────────────────────────────────────────────────────────
 
@@ -265,12 +373,15 @@ def _trash_item():
 @login_required
 def restore():
     item = _trash_item()
-    if item:
+    if item and quota_exceeded(current_user, item.size or 0):
+        flash('Не хватает места в вашем лимите, чтобы восстановить', 'danger')
+    elif item:
         folder = resolve(current_user, item.parent_path, must_exist=False)
         os.makedirs(folder, exist_ok=True)
         target = unique_path(folder, item.name)
         shutil.move(os.path.join(_trash_dir(), item.trash_name), target)
         db.session.delete(item)
+        _record('restore', to_vpath(current_user, target))
         db.session.commit()
         flash(f'«{escape(os.path.basename(target))}» восстановлен в {escape(item.parent_path)}', 'success')
     return redirect(url_for('files.trash'))
@@ -318,6 +429,8 @@ def mkdir():
         return _go(current_path)
     try:
         os.mkdir(os.path.join(folder, name))
+        _record('mkdir', current_path + name)
+        db.session.commit()
         flash(f'Папка «{escape(name)}» создана', 'success')
     except FileExistsError:
         flash('Папка с таким именем уже существует', 'danger')
@@ -337,15 +450,7 @@ def upload_file():
         name = clean_name(f.filename)
         if not name:
             continue
-        size = getattr(f, 'content_length', None) or 0
-        if not size:
-            try:
-                f.stream.seek(0, os.SEEK_END)
-                size = f.stream.tell()
-                f.stream.seek(0)
-            except (OSError, ValueError):
-                size = 0
-        if quota_exceeded_after_upload(current_user, size):
+        if quota_exceeded(current_user, _upload_size(f)):
             flash('Превышен лимит места на диске', 'danger')
             continue
         target = unique_path(folder, name)
@@ -426,6 +531,7 @@ def preview_file():
         resp = send_file(real, download_name=name, as_attachment=False)
     if ext == 'svg':
         resp.headers['Content-Security-Policy'] = 'sandbox'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
     return resp
 
 # ── Удаление (в корзину) ──────────────────────────────────────────────────────
@@ -483,7 +589,12 @@ def rename_item():
             flash('Элемент с таким именем уже существует', 'danger')
         else:
             try:
+                old_vpath = to_vpath(current_user, real)
                 os.rename(real, target)
+                new_vpath = to_vpath(current_user, target)
+                _repath(old_vpath, new_vpath)
+                _record('rename', new_vpath)
+                db.session.commit()
                 flash(f'Переименовано в «{escape(new_name)}»', 'success')
             except OSError as e:
                 flash(f'Не удалось переименовать: {escape(e.strerror or e)}', 'danger')
@@ -492,6 +603,9 @@ def rename_item():
 # ── Копирование ───────────────────────────────────────────────────────────────
 
 def _copy(src, dest_folder):
+    size = folder_size(src) if os.path.isdir(src) else os.path.getsize(src)
+    if quota_exceeded(current_user, size):
+        raise ValueError('не хватает места в вашем лимите')
     target = os.path.join(dest_folder, os.path.basename(src))
     if os.path.exists(target):
         base, ext = (os.path.splitext(os.path.basename(src)) if os.path.isfile(src)
@@ -503,6 +617,8 @@ def _copy(src, dest_folder):
         shutil.copytree(src, target)
     else:
         shutil.copy2(src, target)
+    _record('copy', to_vpath(current_user, target))
+    db.session.commit()
     return os.path.basename(target)
 
 
@@ -555,6 +671,7 @@ def move_item():
         error = _move(src, dest)
     except OSError as e:
         error = f'Не удалось переместить: {escape(e.strerror or e)}'
+    db.session.commit()
     flash(error or f'«{escape(os.path.basename(src))}» перемещён', 'danger' if error else 'success')
     return _go(return_path)
 
@@ -575,6 +692,7 @@ def move_batch():
             flash(error, 'danger')
         else:
             count += 1
+    db.session.commit()
     flash(f'Перемещено: {count} эл.', 'success')
     return _go(return_path)
 

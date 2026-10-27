@@ -164,7 +164,11 @@ def album_image(token, item_id):
         abort(404)
     if not os.path.isfile(real):
         abort(404)
-    return send_file(real, as_attachment=False)
+    response = send_file(real, as_attachment=False)
+    if real.lower().endswith('.svg'):
+        response.headers['Content-Security-Policy'] = 'sandbox'  # скрипты внутри SVG не выполняются
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @public_bp.route('/<token>/album/<int:item_id>/download')

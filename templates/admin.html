@@ -39,6 +39,15 @@
 .u-btn.adm { background: #FEF3C7; color: #B45309; }
 .u-btn.del { background: #FEE2E2; color: #DC2626; }
 .u-btn:hover { filter: brightness(.95); }
+.access-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.access-opt { display: flex; gap: 10px; align-items: flex-start; border: 1.5px solid var(--yd-border); border-radius: 12px; padding: 10px 12px; cursor: pointer; margin: 0; }
+.access-opt input { accent-color: var(--c-primary); margin-top: 3px; }
+.access-opt b { display: block; font-size: 14px; }
+.access-opt span { font-size: 12px; color: var(--yd-muted); font-weight: 400; }
+.access-opt:has(input:checked) { border-color: var(--c-primary); background: #FFFBEA; }
+.quota-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.quota-row input { max-width: 160px; }
+@media (max-width: 700px) { .access-pick { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .adm-form { grid-template-columns: 1fr; } }
 {% endblock %}
 
@@ -56,7 +65,8 @@
             Логина нет: входят <b>только по паролю</b>, поэтому у всех пароли разные
             (если пароль занят, попросите выбрать другой).<br>
             Для обычного пользователя создаётся папка <code>{{ users_dir }}\&lt;имя&gt;</code> — он видит только её.
-            Администратор видит весь диск.</p>
+            Можно дать полный доступ ко всему хранилищу или ограничить личной папкой
+            с лимитом в ГБ. Администратор всегда видит всё.</p>
         <form method="POST" action="{{ url_for('admin.add_user') }}">
             <div class="adm-form">
                 <div>
@@ -71,11 +81,13 @@
             </div>
             <div class="mt-3">
                 <label>Доступ к диску</label>
-                <select class="adm-input" name="access" id="newUserAccess" onchange="document.getElementById('newUserQuota').disabled=this.value==='full'">
-                    <option value="limited" selected>Личная папка с лимитом</option>
-                    <option value="full">Полный доступ к хранилищу как у администратора</option>
-                </select>
-                <div class="d-flex gap-2 align-items-center mt-2"><input class="adm-input" id="newUserQuota" type="number" name="quota_gb" min="0" step="0.1" placeholder="Лимит в ГБ (пусто — без лимита)"><span class="text-muted small">Личный доступ</span></div>
+                <div class="access-pick">
+                    <label class="access-opt"><input type="radio" name="access" value="limited" checked onchange="syncAccess(this.form)">
+                        <div><b><i class="bi bi-folder-fill" style="color:#E0A800"></i> Ограниченный</b><span>Только своя папка и столько ГБ, сколько вы выделите</span></div></label>
+                    <label class="access-opt"><input type="radio" name="access" value="full" onchange="syncAccess(this.form)">
+                        <div><b><i class="bi bi-hdd-fill" style="color:#E0A800"></i> Полный доступ</b><span>Видит всё хранилище целиком, без лимита</span></div></label>
+                </div>
+                <div class="quota-row"><input class="adm-input" type="number" name="quota_gb" min="0.1" step="0.1" placeholder="Например: 10" required><span class="text-muted small">ГБ для этого пользователя</span></div>
             </div>
         </form>
     </div>
@@ -103,12 +115,12 @@
                 {% else %}
                 <div class="u-stat"><b>{{ counts.get(u.id, 0) }}</b><span>файлов</span></div>
                 <div class="u-stat"><b>{{ usage.get(u.id, 0) | filesize }}</b><span>занято</span></div>
-                <div class="u-stat"><b>{{ (u.quota_gb|string + ' ГБ') if u.quota_gb is not none else 'без лимита' }}</b><span>лимит</span></div>
+                <div class="u-stat"><b>{{ ('%g'|format(u.quota_gb) + ' ГБ') if u.quota_gb is not none else 'без лимита' }}</b><span>лимит</span></div>
                 {% endif %}
                 <div class="u-stat"><b>{{ u.last_login.strftime('%d.%m') if u.last_login else '—' }}</b><span>был(а)</span></div>
             </div>
             <div class="u-actions">
-                {% if not u.is_admin %}<form method="POST" action="{{ url_for('admin.set_quota', user_id=u.id) }}" style="display:flex;gap:4px"><input class="adm-input" style="width:92px;padding:6px 8px" type="number" min="0" step="0.1" name="quota_gb" value="{{ u.quota_gb if u.quota_gb is not none else '' }}" placeholder="ГБ"><button class="u-btn ren" title="Лимит"><i class="bi bi-hdd"></i></button></form>{% endif %}
+                {% if not u.is_admin %}<button class="u-btn ren" onclick="openAccess({{ u.id }}, {{ u.username|tojson|forceescape }}, {{ 'true' if u.full_access else 'false' }}, {{ u.quota_gb|tojson }})"><i class="bi bi-hdd-fill"></i> Доступ</button>{% endif %}
                 <button class="u-btn pw" onclick="openPw({{ u.id }}, {{ u.username|tojson|forceescape }})"><i class="bi bi-key-fill"></i> Пароль</button>
                 <button class="u-btn ren" onclick="openRen({{ u.id }}, {{ u.username|tojson|forceescape }})"><i class="bi bi-pencil-fill"></i> Имя</button>
                 <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=u.id) }}" style="display:inline">
@@ -149,6 +161,33 @@
   </div>
 </div>
 
+<!-- Доступ к диску -->
+<div class="modal fade adm-modal" id="accessModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+    <form method="POST" id="accessForm">
+      <div class="modal-content">
+        <div class="modal-header" style="padding:16px 20px;">
+          <h5 class="modal-title" style="font-size:16px;font-weight:700;"><i class="bi bi-hdd-fill me-1" style="color:#E0A800"></i> Доступ: <span id="accessName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:18px 20px;">
+                <div class="access-pick">
+                    <label class="access-opt"><input type="radio" name="access" value="limited" checked onchange="syncAccess(this.form)">
+                        <div><b><i class="bi bi-folder-fill" style="color:#E0A800"></i> Ограниченный</b><span>Только своя папка и столько ГБ, сколько вы выделите</span></div></label>
+                    <label class="access-opt"><input type="radio" name="access" value="full" onchange="syncAccess(this.form)">
+                        <div><b><i class="bi bi-hdd-fill" style="color:#E0A800"></i> Полный доступ</b><span>Видит всё хранилище целиком, без лимита</span></div></label>
+                </div>
+                <div class="quota-row"><input class="adm-input" type="number" name="quota_gb" min="0.1" step="0.1" placeholder="Например: 10" required><span class="text-muted small">ГБ для этого пользователя</span></div>
+        </div>
+        <div class="modal-footer" style="padding:12px 20px;gap:8px;">
+          <button type="button" class="yd-btn-create" style="width:auto;padding:8px 18px;" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="yd-btn-upload" style="width:auto;padding:8px 18px;">Сохранить</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Переименование -->
 <div class="modal fade adm-modal" id="renModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
@@ -175,6 +214,24 @@
 <script>
 const PW_URL  = {{ url_for('admin.set_password', user_id=0)|tojson }};
 const REN_URL = {{ url_for('admin.rename_user', user_id=0)|tojson }};
+const ACCESS_URL = {{ url_for('admin.set_access', user_id=0)|tojson }};
+
+// «Полный доступ» — без лимита, «Ограниченный» — лимит в ГБ обязателен
+function syncAccess(form) {
+    const full = form.querySelector('input[name=access]:checked').value === 'full';
+    const q = form.querySelector('input[name=quota_gb]');
+    q.disabled = full; q.required = !full;
+    q.closest('.quota-row').style.opacity = full ? .45 : 1;
+}
+function openAccess(id, name, full, quota) {
+    const form = document.getElementById('accessForm');
+    form.action = ACCESS_URL.replace('/0/', '/' + id + '/');
+    document.getElementById('accessName').textContent = name;
+    form.querySelector(`input[name=access][value=${full ? 'full' : 'limited'}]`).checked = true;
+    form.querySelector('input[name=quota_gb]').value = quota ?? '';
+    syncAccess(form);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('accessModal')).show();
+}
 
 function openPw(id, name) {
     document.getElementById('pwForm').action = PW_URL.replace('/0/', '/' + id + '/');

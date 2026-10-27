@@ -1,10 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Альбомы — {{ disk_name }}{% endblock %}
+
+{% block extra_styles %}
+.alb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.alb-card { display: block; background: #fff; border: 1.5px solid var(--yd-border); border-radius: 16px; overflow: hidden; text-decoration: none; color: var(--yd-text); transition: border-color .15s, box-shadow .15s, transform .15s; }
+.alb-card:hover { border-color: #F5DD7A; box-shadow: 0 8px 22px rgba(36,34,29,.09); transform: translateY(-2px); color: var(--yd-text); }
+.alb-cover { height: 150px; background: #F4F2EB; display: flex; align-items: center; justify-content: center; }
+.alb-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.alb-cover i { font-size: 46px; color: #D9CFA8; }
+.alb-info { padding: 11px 14px 13px; }
+.alb-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alb-meta { font-size: 12px; color: var(--yd-muted); margin-top: 2px; }
+.alb-new { display: flex; gap: 8px; margin-bottom: 20px; max-width: 480px; }
+{% endblock %}
+
 {% block main %}
 <div class="yd-main-head"><span class="yd-main-title"><i class="bi bi-images" style="color:#E0A800"></i> Альбомы</span></div>
-<div class="yd-content"><div style="max-width:900px">
-<form method="POST" action="{{ url_for('files.create_album') }}" style="display:flex;gap:8px;margin-bottom:18px;max-width:460px"><input class="form-control" name="name" placeholder="Название альбома" required maxlength="256"><button class="yd-btn-upload" style="width:auto;padding:8px 16px"><i class="bi bi-plus-lg"></i> Создать</button></form>
-<div class="yd-grid">{% for album in albums %}<div class="yd-folder-card" style="cursor:default"><a href="{{ url_for('files.album_view', album_id=album.id) }}" style="display:flex;flex-direction:column;align-items:center;text-decoration:none;color:inherit"><div class="yd-folder-icon" style="--fc:#A78BFA"></div><span class="yd-folder-name">{{ album.name }}</span><span class="yd-meta">{{ album.created_at.strftime('%d.%m.%Y') }}</span></a><button class="btn btn-sm btn-outline-secondary mt-2" onclick="openAlbumShare({{ album.id }})"><i class="bi bi-share"></i> Поделиться</button></div>{% else %}<div class="yd-empty"><div class="yd-empty-ico"><i class="bi bi-images"></i></div><h3>Альбомов пока нет</h3><p>Создайте альбом и добавьте в него фотографии.</p></div>{% endfor %}</div></div></div>
-<div class="modal fade" id="albumShareModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form method="POST" id="albumShareForm"><div class="modal-content"><div class="modal-header"><h5>Поделиться альбомом</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Срок ссылки</label><select class="form-select" name="expires_days"><option value="1">1 день</option><option value="7" selected>7 дней</option><option value="30">30 дней</option><option value="0">Бессрочно</option></select><label class="d-flex gap-2 mt-3"><input type="checkbox" name="allow_download" value="1" checked> Разрешить скачивание изображений</label></div><div class="modal-footer"><button type="button" class="yd-btn-create" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px">Создать ссылку</button></div></div></form></div></div>
+<div class="yd-content">
+    <form method="POST" action="{{ url_for('files.create_album') }}" class="alb-new">
+        <input class="form-control" name="name" placeholder="Название нового альбома" required maxlength="256">
+        <button class="yd-btn-upload" style="width:auto;padding:8px 16px;white-space:nowrap"><i class="bi bi-plus-lg"></i> Создать</button>
+    </form>
+    {% if albums %}
+    <div class="alb-grid">
+        {% for row in albums %}
+        <a class="alb-card" href="{{ url_for('files.album_view', album_id=row.album.id) }}">
+            <div class="alb-cover">
+                {% if row.cover %}<img src="{{ url_for('files.preview_file', path=row.cover) }}" alt="" loading="lazy">
+                {% else %}<i class="bi bi-images"></i>{% endif %}
+            </div>
+            <div class="alb-info">
+                <div class="alb-name" title="{{ row.album.name }}">{{ row.album.name }}</div>
+                <div class="alb-meta">{{ row.count }} фото · {{ row.album.created_at.strftime('%d.%m.%Y') }}</div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="yd-empty"><div class="yd-empty-ico"><i class="bi bi-images"></i></div><h3>Альбомов пока нет</h3><p>Создайте альбом и добавьте в него фотографии с диска.</p></div>
+    {% endif %}
+</div>
 {% endblock %}
-{% block scripts %}<script>function openAlbumShare(id){document.getElementById('albumShareForm').action=`/files/albums/${id}/share`;bootstrap.Modal.getOrCreateInstance(document.getElementById('albumShareModal')).show();}</script>{% endblock %}

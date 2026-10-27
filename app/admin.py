@@ -6,7 +6,7 @@ from flask_login import current_user
 from markupsafe import escape
 from app import db
 from app.auth import admin_required, check_new_password, pw_hash
-from app.models import User, Setting, TrashItem, Share
+from app.models import User, Setting, TrashItem, Share, Album, AlbumItem, Activity
 from app.storage import storage_root, users_dir, bad_name, check_storage_path, BAD_NAME_MSG
 
 admin_bp = Blueprint('admin', __name__)
@@ -20,13 +20,44 @@ def _get_user(user_id):
 def _admins_count():
     return User.query.filter_by(is_admin=True).count()
 
+
+def _access_from_form():
+    """(полный доступ, лимит ГБ, текст ошибки) из полей access и quota_gb."""
+    if request.form.get('access') == 'full':
+        return True, None, None
+    raw = request.form.get('quota_gb', '').strip().replace(',', '.')
+    try:
+        quota = float(raw)
+    except ValueError:
+        return False, None, 'Укажите, сколько ГБ выделить пользователю (числом)'
+    if quota <= 0:
+        return False, None, 'Лимит должен быть больше 0 ГБ'
+    return False, quota, None
+
+
+def delete_user_data(user_id):
+    """Альбомы, ссылки, история и корзина пользователя — чтобы новому с тем же id ничего не досталось."""
+    album_ids = [a.id for a in Album.query.filter_by(user_id=user_id).all()]
+    if album_ids:
+        AlbumItem.query.filter(AlbumItem.album_id.in_(album_ids)).delete(synchronize_session=False)
+    Album.query.filter_by(user_id=user_id).delete()
+    Activity.query.filter_by(user_id=user_id).delete()
+    Share.query.filter_by(user_id=user_id).delete()
+    for t in TrashItem.query.filter_by(user_id=user_id).all():
+        p = os.path.join(current_app.config['DATA_DIR'], 'trash', t.trash_name)
+        if os.path.isdir(p):
+            shutil.rmtree(p, ignore_errors=True)
+        elif os.path.exists(p):
+            os.remove(p)
+        db.session.delete(t)
+
 @admin_bp.route('/users')
 @admin_required
 def users():
     all_users = User.query.order_by(User.is_admin.desc(), User.username).all()
     usage, counts = {}, {}
     for u in all_users:  # размер считаем только у личных папок, у админа — весь диск
-        if u.is_admin:
+        if u.is_admin or u.full_access:
             continue
         folder = os.path.join(users_dir(), u.username)
         total = n = 0
@@ -56,19 +87,17 @@ def add_user():
     if error:
         flash(error, 'danger')
         return redirect(url_for('admin.users'))
-    full_access = request.form.get('access') == 'full'
-    raw_quota = request.form.get('quota_gb', '').strip()
-    try:
-        quota = None if full_access or raw_quota == '' else max(0, float(raw_quota))
-    except ValueError:
-        flash('Укажите лимит в ГБ числом', 'danger')
+    full_access, quota, error = _access_from_form()
+    if error:
+        flash(error, 'danger')
         return redirect(url_for('admin.users'))
     user = User(username=name, password_hash=pw_hash.hash(password),
                 is_admin=False, full_access=full_access, quota_gb=quota)
     db.session.add(user)
     db.session.commit()
     os.makedirs(os.path.join(users_dir(), name), exist_ok=True)
-    where = 'видит весь диск' if user.is_admin or user.full_access else f'его папка: {escape(os.path.join(users_dir(), name))}'
+    where = ('полный доступ ко всему хранилищу' if user.full_access
+             else f'лимит {quota:g} ГБ, его папка: {escape(os.path.join(users_dir(), name))}')
     flash(f'Пользователь «{escape(name)}» добавлен, пароль <b class="pw-shown">{escape(password)}</b>, {where}', 'success')
     return redirect(url_for('admin.users'))
 
@@ -115,19 +144,25 @@ def rename_user(user_id):
         flash(f'Имя изменено на «{escape(name)}»', 'success')
     return redirect(url_for('admin.users'))
 
-@admin_bp.route('/users/<int:user_id>/quota', methods=['POST'])
+@admin_bp.route('/users/<int:user_id>/access', methods=['POST'])
 @admin_required
-def set_quota(user_id):
+def set_access(user_id):
     user = _get_user(user_id)
     if not user:
         return redirect(url_for('admin.users'))
-    raw = request.form.get('quota_gb', '').strip()
-    try:
-        user.quota_gb = None if raw == '' else max(0, float(raw))
-        db.session.commit()
-        flash('Лимит диска обновлён', 'success')
-    except ValueError:
-        flash('Укажите лимит в ГБ числом', 'danger')
+    if user.is_admin:
+        flash('У администратора всегда полный доступ', 'warning')
+        return redirect(url_for('admin.users'))
+    full_access, quota, error = _access_from_form()
+    if error:
+        flash(error, 'danger')
+        return redirect(url_for('admin.users'))
+    user.full_access, user.quota_gb = full_access, quota
+    db.session.commit()
+    if not full_access:
+        os.makedirs(os.path.join(users_dir(), user.username), exist_ok=True)
+    flash(f'«{escape(user.username)}»: ' + ('полный доступ ко всему хранилищу' if full_access
+                                           else f'личная папка, лимит {quota:g} ГБ'), 'success')
     return redirect(url_for('admin.users'))
 
 @admin_bp.route('/users/<int:user_id>/toggle-admin', methods=['POST'])
@@ -164,11 +199,7 @@ def delete_user(user_id):
                          trash_name=uuid.uuid4().hex, is_directory=True, size=0)
         shutil.move(folder, os.path.join(_trash_dir(), item.trash_name))
         db.session.add(item)
-    for t in TrashItem.query.filter_by(user_id=user.id).all():
-        p = os.path.join(current_app.config['DATA_DIR'], 'trash', t.trash_name)
-        shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else (os.path.exists(p) and os.remove(p))
-        db.session.delete(t)
-    Share.query.filter_by(user_id=user.id).delete()
+    delete_user_data(user.id)
     db.session.delete(user)
     db.session.commit()
     flash(f'Пользователь «{escape(name)}» удалён. Его папка — в вашей корзине, её можно вернуть.', 'success')
@@ -180,6 +211,9 @@ def reset_setup():
     """Return to first-run setup without deleting files in the storage folder."""
     import sqlite3
     from flask_login import logout_user
+    if not pw_hash.verify(request.form.get('password', ''), current_user.password_hash):
+        flash('Неверный пароль администратора — настройки не сброшены', 'danger')
+        return redirect(request.referrer or url_for('files.list_files'))
     database_path = current_app.config['SQLALCHEMY_DATABASE_URI'].removeprefix('sqlite:///')
     backup_path = database_path + '.backup-' + datetime.utcnow().strftime('%Y%m%d%H%M%S')
     os.makedirs(os.path.dirname(database_path), exist_ok=True)
@@ -194,6 +228,7 @@ def reset_setup():
     db.drop_all()
     db.create_all()
     db.session.commit()
+    shutil.rmtree(os.path.join(current_app.config['DATA_DIR'], 'trash'), ignore_errors=True)
     logout_user()
     flash('Настройки сброшены. Файлы в хранилище не удалены.', 'success')
     return redirect(url_for('auth.setup'))

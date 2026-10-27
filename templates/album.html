@@ -1,6 +1,237 @@
 {% extends "base.html" %}
 {% block title %}{{ album.name }} — {{ disk_name }}{% endblock %}
-{% block main %}<div class="yd-main-head"><a href="{{ url_for('files.albums') }}" class="me-3"><i class="bi bi-arrow-left"></i></a><span class="yd-main-title"><i class="bi bi-images" style="color:#E0A800"></i> {{ album.name }}</span><button class="sel-btn" onclick="openShare()"><i class="bi bi-share"></i> Поделиться</button></div>
-<div class="yd-content"><div class="d-flex gap-2 mb-3 flex-wrap align-items-start"><form method="POST" action="{{ url_for('files.album_add', album_id=album.id) }}"><select class="form-select mb-2" name="paths" multiple size="4" style="max-width:500px;min-width:280px">{% for p in available %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select><button class="yd-btn-upload" style="width:auto;padding:8px 16px"><i class="bi bi-plus-lg"></i> Добавить выбранные фото</button></form><form method="POST" action="{{ url_for('files.album_upload', album_id=album.id) }}" enctype="multipart/form-data"><label class="form-label">Куда сохранить новые фото</label><select class="form-select mb-2" name="dest_path" required>{% for folder in folders %}<option value="{{ folder }}">{{ folder }}</option>{% endfor %}</select><label class="form-label">Загрузить новые фото</label><input class="form-control mb-2" type="file" name="photos" accept="image/*" multiple required><button class="yd-btn-create" style="width:auto;padding:8px 16px"><i class="bi bi-cloud-arrow-up"></i> Загрузить в альбом</button></form></div><div class="yd-grid">{% for path in paths %}{% set name=path.rstrip('/').split('/')[-1] %}<div class="yd-file-card"><div class="yd-file-thumb"><img src="{{ url_for('files.preview_file', path=path) }}" alt="{{ name }}" loading="lazy"></div><span class="yd-file-name">{{ name }}</span></div>{% else %}<div class="yd-empty"><h3>В альбоме пока нет фотографий</h3><p>Выберите существующие фото выше или загрузите файлы в папку диска.</p></div>{% endfor %}</div></div>
-<div class="modal fade" id="albumShareModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><form method="POST" action="{{ url_for('files.share_album', album_id=album.id) }}"><div class="modal-content"><div class="modal-header"><h5>Поделиться альбомом</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Срок ссылки</label><select class="form-select" name="expires_days"><option value="1">1 день</option><option value="7" selected>7 дней</option><option value="30">30 дней</option><option value="0">Бессрочно</option></select><label class="d-flex gap-2 mt-3"><input type="checkbox" name="allow_download" value="1" checked> Разрешить просмотр фотографий</label></div><div class="modal-footer"><button type="button" class="yd-btn-create" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px">Создать ссылку</button></div></div></form></div></div>
-{% endblock %}{% block scripts %}<script>function openShare(){bootstrap.Modal.getOrCreateInstance(document.getElementById('albumShareModal')).show();}</script>{% endblock %}
+
+{% block extra_styles %}
+.alb-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.alb-actions .yd-btn-upload, .alb-actions .yd-btn-create { width: auto; padding: 8px 14px; white-space: nowrap; }
+.alb-actions .danger:hover { background: #FEE2E2; color: #DC2626; border-color: #FCA5A5; }
+.ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.ph { position: relative; border-radius: 14px; overflow: hidden; background: #F4F2EB; aspect-ratio: 1; cursor: zoom-in; border: 1.5px solid var(--yd-border); }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+.ph:hover img { transform: scale(1.04); }
+.ph-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 7px; font-size: 12px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.55)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity .15s; }
+.ph:hover .ph-name { opacity: 1; }
+.ph-del { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; border: 0; border-radius: 9px; background: rgba(255,255,255,.92); color: #DC2626; display: none; align-items: center; justify-content: center; cursor: pointer; }
+.ph:hover .ph-del { display: flex; }
+@media (hover: none) { .ph-del { display: flex; } .ph-name { opacity: 1; } }
+
+#viewer { display: none; position: fixed; inset: 0; z-index: 2000; background: rgba(15,14,12,.93); flex-direction: column; }
+#viewer.show { display: flex; }
+.v-top { display: flex; align-items: center; gap: 8px; padding: 10px 14px; color: #fff; }
+.v-title { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-btn { width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; text-decoration: none; flex-shrink: 0; }
+.v-btn:hover { background: rgba(255,255,255,.25); color: #fff; }
+.v-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; padding: 0 64px 20px; }
+.v-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; user-select: none; }
+.v-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; font-size: 22px; }
+.v-prev { left: 10px; } .v-next { right: 10px; }
+@media (max-width: 600px) { .v-stage { padding: 0 8px 12px; } .v-nav { background: rgba(0,0,0,.35); } }
+
+.pk-crumbs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 13px; margin-bottom: 10px; }
+.pk-crumbs a { color: var(--yd-text); text-decoration: none; padding: 2px 6px; border-radius: 6px; }
+.pk-crumbs a:hover { background: var(--yd-hover); }
+.pk-body { height: 52vh; overflow-y: auto; }
+.pk-folders { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.pk-folder { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; cursor: pointer; font-size: 14px; }
+.pk-folder:hover { background: var(--yd-hover); }
+.pk-folder i { color: #F2AE00; font-size: 18px; }
+.pk-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.pk-img { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 3px solid transparent; background: #F4F2EB; }
+.pk-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pk-img.on { border-color: var(--c-primary); }
+.pk-img .chk { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.9); border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #3D3000; }
+.pk-img.on .chk { background: var(--c-primary); border-color: var(--c-primary); }
+.pk-empty { color: var(--yd-muted); font-size: 13px; padding: 14px 4px; }
+{% endblock %}
+
+{% block main %}
+<div class="yd-main-head">
+    <a href="{{ url_for('files.albums') }}" class="me-2" style="color:var(--yd-text);font-size:20px" title="Все альбомы"><i class="bi bi-arrow-left"></i></a>
+    <span class="yd-main-title" style="min-width:0;overflow:hidden;text-overflow:ellipsis"><i class="bi bi-images" style="color:#E0A800"></i> {{ album.name }}</span>
+    <span style="font-size:13px;color:var(--yd-muted);white-space:nowrap;">{{ items|length }} фото</span>
+</div>
+
+<div class="yd-content">
+    <div class="alb-actions">
+        <button class="yd-btn-upload" onclick="openPicker()"><i class="bi bi-plus-lg"></i> Добавить с диска</button>
+        <form method="POST" action="{{ url_for('files.album_upload', album_id=album.id) }}" enctype="multipart/form-data" id="albumUploadForm" style="margin:0">
+            <input type="file" name="photos" accept="image/*" multiple hidden onchange="this.form.submit()">
+            <button type="button" class="yd-btn-create" onclick="this.form.photos.click()" title="Сохраняются в папку {{ upload_folder }}"><i class="bi bi-cloud-arrow-up"></i> Загрузить новые</button>
+        </form>
+        <button class="yd-btn-create" onclick="showModal('albumShareModal')"><i class="bi bi-share"></i> Поделиться</button>
+        <button class="yd-btn-create" onclick="showModal('albumRenameModal')"><i class="bi bi-pencil"></i> Переименовать</button>
+        <button class="yd-btn-create danger" onclick="showModal('albumDeleteModal')"><i class="bi bi-trash3"></i> Удалить альбом</button>
+    </div>
+
+    {% if items %}
+    <div class="ph-grid">
+        {% for item in items %}
+        {% set name = item.path.rstrip('/').split('/')[-1] %}
+        <div class="ph" onclick="openViewer({{ loop.index0 }})">
+            <img src="{{ url_for('files.preview_file', path=item.path) }}" alt="{{ name }}" loading="lazy">
+            <div class="ph-name">{{ name }}</div>
+            <button class="ph-del" title="Убрать из альбома" onclick="event.stopPropagation(); removeItem({{ item.id }})"><i class="bi bi-x-lg"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="yd-empty"><div class="yd-empty-ico"><i class="bi bi-image"></i></div><h3>В альбоме пока нет фотографий</h3>
+        <p>Нажмите «Добавить с диска», чтобы выбрать фото из папок, или «Загрузить новые» — они сохранятся в папку <b>{{ upload_folder }}</b>.</p></div>
+    {% endif %}
+</div>
+
+<!-- Просмотр фото -->
+<div id="viewer">
+    <div class="v-top">
+        <span class="v-title" id="vTitle"></span>
+        <span id="vCount" style="font-size:13px;opacity:.7;white-space:nowrap"></span>
+        <a class="v-btn" id="vDownload" title="Скачать"><i class="bi bi-download"></i></a>
+        <button class="v-btn" title="Убрать из альбома" onclick="removeItem(PHOTOS[cur].id)"><i class="bi bi-trash3"></i></button>
+        <button class="v-btn" title="Закрыть (Esc)" onclick="closeViewer()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="v-stage" onclick="if (event.target === this) closeViewer()">
+        <button class="v-btn v-nav v-prev" onclick="step(-1)" title="Предыдущее (←)"><i class="bi bi-chevron-left"></i></button>
+        <img id="vImg" alt="">
+        <button class="v-btn v-nav v-next" onclick="step(1)" title="Следующее (→)"><i class="bi bi-chevron-right"></i></button>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('files.album_remove', album_id=album.id) }}" id="removeForm" style="display:none"><input name="item_id"></form>
+
+<!-- Выбор фото с диска -->
+<div class="modal fade" id="pickerModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form method="POST" action="{{ url_for('files.album_add', album_id=album.id) }}" class="modal-content" id="pickerForm">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-images me-2" style="color:#E0A800"></i>Выберите фото</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="pk-crumbs" id="pkCrumbs"></div>
+        <div class="pk-body"><div class="pk-folders" id="pkFolders"></div><div class="pk-images" id="pkImages"></div></div>
+      </div>
+      <div class="modal-footer" style="gap:8px">
+        <span class="me-auto small text-muted" id="pkCount">Ничего не выбрано</span>
+        <button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button>
+        <button class="yd-btn-upload" style="width:auto;padding:8px 16px" id="pkSubmit" disabled><i class="bi bi-plus-lg"></i> Добавить в альбом</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Поделиться -->
+<div class="modal fade" id="albumShareModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.share_album', album_id=album.id) }}" class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Поделиться альбомом</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><label class="form-label">Срок ссылки</label><select class="form-select" name="expires_days"><option value="1">1 день</option><option value="7" selected>7 дней</option><option value="30">30 дней</option><option value="0">Бессрочно</option></select>
+    <label class="d-flex gap-2 mt-3"><input type="checkbox" name="allow_download" value="1" checked> Разрешить скачивать фотографии</label></div>
+  <div class="modal-footer" style="gap:8px"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px">Создать ссылку</button></div>
+</form></div></div>
+
+<!-- Переименовать -->
+<div class="modal fade" id="albumRenameModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.rename_album', album_id=album.id) }}" class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Переименовать альбом</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><input class="form-control" name="name" value="{{ album.name }}" required maxlength="256"></div>
+  <div class="modal-footer" style="gap:8px"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px">Сохранить</button></div>
+</form></div></div>
+
+<!-- Удалить -->
+<div class="modal fade" id="albumDeleteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.delete_album', album_id=album.id) }}" class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Удалить альбом?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><p class="mb-0">Альбом «{{ album.name }}» и его публичные ссылки будут удалены. <b>Сами фотографии останутся на диске.</b></p></div>
+  <div class="modal-footer" style="gap:8px"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px"><i class="bi bi-trash3"></i> Удалить</button></div>
+</form></div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PHOTOS = [{% for item in items %}{
+    id: {{ item.id }},
+    name: {{ item.path.rstrip('/').split('/')[-1]|tojson }},
+    src: {{ url_for('files.preview_file', path=item.path)|tojson }},
+    download: {{ url_for('files.download_file', path=item.path)|tojson }}
+}{{ ',' if not loop.last }}{% endfor %}];
+const IMAGES_URL = {{ url_for('files.images_list')|tojson }};
+let cur = 0;
+
+function showModal(id) { bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).show(); }
+
+// ── Просмотр ──
+function openViewer(i) { cur = i; render(); document.getElementById('viewer').classList.add('show'); }
+function closeViewer() { document.getElementById('viewer').classList.remove('show'); document.getElementById('vImg').src = ''; }
+function step(d) { cur = (cur + d + PHOTOS.length) % PHOTOS.length; render(); }
+function render() {
+    const p = PHOTOS[cur];
+    document.getElementById('vImg').src = p.src;
+    document.getElementById('vTitle').textContent = p.name;
+    document.getElementById('vCount').textContent = (cur + 1) + ' из ' + PHOTOS.length;
+    document.getElementById('vDownload').href = p.download;
+    document.querySelectorAll('.v-nav').forEach(b => b.style.display = PHOTOS.length > 1 ? '' : 'none');
+}
+document.addEventListener('keydown', e => {
+    if (!document.getElementById('viewer').classList.contains('show')) return;
+    if (e.key === 'Escape') closeViewer();
+    if (e.key === 'ArrowLeft') step(-1);
+    if (e.key === 'ArrowRight') step(1);
+});
+// листание пальцем на телефоне
+let touchX = null;
+document.getElementById('vImg').addEventListener('touchstart', e => touchX = e.touches[0].clientX, {passive: true});
+document.getElementById('vImg').addEventListener('touchend', e => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+    if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+});
+
+function removeItem(id) {
+    const f = document.getElementById('removeForm');
+    f.item_id.value = id; f.submit();
+}
+
+// ── Выбор фото с диска (папку за папкой, без обхода всего диска) ──
+const picked = new Set();
+function openPicker() { picked.clear(); updatePicked(); loadFolder('/'); showModal('pickerModal'); }
+function updatePicked() {
+    document.getElementById('pkCount').textContent = picked.size ? 'Выбрано: ' + picked.size : 'Ничего не выбрано';
+    document.getElementById('pkSubmit').disabled = !picked.size;
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; }
+async function loadFolder(path) {
+    const folders = document.getElementById('pkFolders'), images = document.getElementById('pkImages');
+    folders.innerHTML = ''; images.innerHTML = '<div class="pk-empty">Загрузка…</div>';
+    let data;
+    try {
+        const r = await fetch(IMAGES_URL + '?path=' + encodeURIComponent(path));
+        data = await r.json();
+    } catch (e) { images.innerHTML = '<div class="pk-empty">Не удалось открыть папку</div>'; return; }
+    // хлебные крошки
+    const crumbs = document.getElementById('pkCrumbs'); crumbs.innerHTML = '';
+    const home = el('a', '', 'Мой диск'); home.href = '#'; home.onclick = e => { e.preventDefault(); loadFolder('/'); };
+    crumbs.append(home);
+    let acc = '/';
+    data.path.split('/').filter(Boolean).forEach(part => {
+        acc += part + '/'; const target = acc;
+        const a = el('a', '', part); a.href = '#'; a.onclick = e => { e.preventDefault(); loadFolder(target); };
+        crumbs.append(el('span', 'text-muted', '›'), a);
+    });
+    data.folders.forEach(f => {
+        const row = el('div', 'pk-folder'); row.append(el('i', 'bi bi-folder-fill'), el('span', '', f.name));
+        row.onclick = () => loadFolder(f.path); folders.append(row);
+    });
+    images.innerHTML = '';
+    if (!data.images.length) images.append(el('div', 'pk-empty', data.folders.length ? 'В этой папке нет фото — откройте вложенную папку' : 'Здесь нет фото'));
+    data.images.forEach(img => {
+        const card = el('div', 'pk-img' + (picked.has(img.path) ? ' on' : ''));
+        const i = el('img'); i.src = img.thumb; i.loading = 'lazy'; i.alt = img.name; i.title = img.name;
+        const chk = el('span', 'chk'); chk.innerHTML = '<i class="bi bi-check-lg"></i>';
+        card.append(i, chk);
+        card.onclick = () => {
+            picked.has(img.path) ? picked.delete(img.path) : picked.add(img.path);
+            card.classList.toggle('on', picked.has(img.path)); updatePicked();
+        };
+        images.append(card);
+    });
+}
+document.getElementById('pickerForm').addEventListener('submit', e => {
+    const form = e.target;
+    form.querySelectorAll('input[name=paths]').forEach(i => i.remove());
+    picked.forEach(p => { const i = el('input'); i.type = 'hidden'; i.name = 'paths'; i.value = p; form.append(i); });
+});
+</script>
+{% endblock %}

@@ -53,8 +53,13 @@ def users_dir():
     return os.path.join(storage_root(), current_app.config['USERS_FOLDER'])
 
 
+def has_full_access(user):
+    """Администратор или пользователь с полным доступом видит всё хранилище."""
+    return user.is_admin or getattr(user, 'full_access', False)
+
+
 def user_home(user):
-    if user.is_admin or getattr(user, 'full_access', False):
+    if has_full_access(user):
         return storage_root()
     return os.path.join(users_dir(), user.username)
 
@@ -68,13 +73,8 @@ def user_usage(user):
     return folder_size(user_home(user))
 
 def quota_exceeded(user, additional=0):
-    return (not user.is_admin and not getattr(user, 'full_access', False) and user.quota_gb is not None and
-            user_usage(user) + additional > user.quota_gb * 1024 ** 3)
-
-
-def quota_exceeded_after_upload(user, additional=0):
-    """Check the quota using the actual current contents plus upload size."""
-    return (not user.is_admin and not getattr(user, 'full_access', False) and user.quota_gb is not None and
+    """True, если после добавления additional байт пользователь выйдет за свой лимит."""
+    return (not has_full_access(user) and user.quota_gb is not None and
             user_usage(user) + additional > user.quota_gb * 1024 ** 3)
 
 
@@ -144,7 +144,7 @@ def is_locked(user, real):
     """Нельзя удалять/переименовывать/переносить: корень, папку «Пользователи» и личные папки."""
     if _norm(real) == _norm(user_home(user)):
         return True
-    if user.is_admin or getattr(user, 'full_access', False):
+    if has_full_access(user):
         ud = users_dir()
         return _norm(real) == _norm(ud) or _norm(os.path.dirname(real)) == _norm(ud)
     return False
