@@ -5,6 +5,7 @@
 <h1>{{ disk_name }}</h1>
 <p class="sub">Введите пароль, который вам выдал администратор</p>
 <form method="POST">
+    {{ csrf_field() }}
     <div class="field">
         <input type="password" name="password" placeholder="Пароль" required autofocus autocomplete="current-password">
         <button type="button" class="eye" title="Показать пароль"><i class="bi bi-eye"></i></button>

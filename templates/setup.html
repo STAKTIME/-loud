@@ -5,6 +5,7 @@
 <h1>Добро пожаловать!</h1>
 <p class="sub">Это первый запуск. Придумайте пароль администратора — с ним вы будете входить и добавлять других пользователей.</p>
 <form method="POST">
+    {{ csrf_field() }}
     <div class="field">
         <label>Как вас называть</label>
         <input type="text" name="username" value="{{ username }}" placeholder="Например: Админ" maxlength="80" style="padding-right:16px">

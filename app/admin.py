@@ -229,7 +229,9 @@ def reset_setup():
     db.create_all()
     db.session.commit()
     shutil.rmtree(os.path.join(current_app.config['DATA_DIR'], 'trash'), ignore_errors=True)
+    from app.csrf import rotate_token
     logout_user()
+    rotate_token()  # сессия сброшена — прежний токен недействителен
     flash('Настройки сброшены. Файлы в хранилище не удалены.', 'success')
     return redirect(url_for('auth.setup'))
 

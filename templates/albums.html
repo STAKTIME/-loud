@@ -18,6 +18,7 @@
 <div class="yd-main-head"><span class="yd-main-title"><i class="bi bi-images" style="color:#E0A800"></i> Альбомы</span></div>
 <div class="yd-content">
     <form method="POST" action="{{ url_for('files.create_album') }}" class="alb-new">
+        {{ csrf_field() }}
         <input class="form-control" name="name" placeholder="Название нового альбома" required maxlength="256">
         <button class="yd-btn-upload" style="width:auto;padding:8px 16px;white-space:nowrap"><i class="bi bi-plus-lg"></i> Создать</button>
     </form>

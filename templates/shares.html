@@ -11,7 +11,7 @@
 {% else %}<div class="yd-empty"><div class="yd-empty-ico"><i class="bi bi-link-45deg"></i></div><h3>Публичных ссылок нет</h3><p>Созданные ссылки на файлы появятся здесь.</p></div>{% endfor %}
 </div></div>
 <div class="modal fade" id="shareDeleteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:400px"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-link-45deg me-2" style="color:#E0A800"></i>Отключить ссылку?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0">Ссылка перестанет работать для всех, у кого она есть.</p><div id="shareDeleteName" class="text-muted small mt-2" style="word-break:break-all"></div></div><div class="modal-footer"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-danger" onclick="document.getElementById('shareDeleteForm').submit()"><i class="bi bi-x-circle me-1"></i>Отключить ссылку</button></div></div></div></div>
-<form id="shareDeleteForm" method="POST" style="display:none"></form>
+<form id="shareDeleteForm" method="POST" style="display:none">{{ csrf_field() }}</form>
 {% block scripts %}<script>
 function openShareDelete(form, name) {
     document.getElementById('shareDeleteForm').action = form.action;

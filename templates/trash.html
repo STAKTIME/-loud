@@ -31,6 +31,7 @@
     {% if items %}
     <form method="POST" action="{{ url_for('files.empty_trash') }}"
           onsubmit="return confirm('Очистить корзину? Файлы будут удалены навсегда.')">
+        {{ csrf_field() }}
         <button type="submit" class="yd-btn-upload yd-btn-danger" style="width:auto;padding:7px 16px;font-size:13px;">
             <i class="bi bi-trash3"></i> Очистить корзину
         </button>
@@ -77,6 +78,7 @@
         {% endif %}
         <div class="trash-actions">
             <form method="POST" action="{{ url_for('files.restore') }}" style="display:inline;">
+                {{ csrf_field() }}
                 <input type="hidden" name="item_id" value="{{ item.id }}">
                 <button type="submit" class="trash-btn restore" title="Восстановить">
                     <i class="bi bi-arrow-counterclockwise"></i> Вернуть
@@ -84,6 +86,7 @@
             </form>
             <form method="POST" action="{{ url_for('files.delete_permanent') }}" style="display:inline;"
                   onsubmit="return confirm('Удалить «{{ item.name }}» навсегда?')">
+                {{ csrf_field() }}
                 <input type="hidden" name="item_id" value="{{ item.id }}">
                 <button type="submit" class="trash-btn danger" title="Удалить навсегда">
                     <i class="bi bi-x-lg"></i>

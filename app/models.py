@@ -51,6 +51,25 @@ class TrashItem(db.Model):
     size = db.Column(db.BigInteger, default=0)
     deleted_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class UploadSession(db.Model):
+    """Незавершённая загрузка большого файла по частям (chunked upload).
+
+    Части лежат в data/chunked/<id>/<номер>. После приёма всех частей они
+    склеиваются в один файл в папку пользователя. Состояние живёт в базе,
+    поэтому обрыв соединения не портит загрузку: клиент спрашивает список
+    принятых частей и присылает только недостающие (докачка).
+    """
+    __tablename__ = 'upload_sessions'
+    id = db.Column(db.String(64), primary_key=True)          # случайный токен загрузки
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    filename = db.Column(db.String(256), nullable=False)
+    folder = db.Column(db.String(1024), nullable=False)      # папка назначения (путь на сайте)
+    size = db.Column(db.BigInteger, nullable=False)          # полный размер файла в байтах
+    chunk_size = db.Column(db.Integer, nullable=False)
+    total_chunks = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Share(db.Model):
     """Публичная ссылка на файл или папку (путь на сайте от корня пользователя)."""
     __tablename__ = 'shares'

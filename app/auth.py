@@ -7,6 +7,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 import bcrypt
 from app import db
 from app.models import User, Setting
+from app.csrf import csrf_protect, rotate_token
 from app.storage import bad_name, check_storage_path, BAD_NAME_MSG
 
 auth_bp = Blueprint('auth', __name__)
@@ -74,6 +75,7 @@ def _register_fail(ip):
 # ── Маршруты ──────────────────────────────────────────────────────────────────
 
 @auth_bp.route('/setup', methods=['GET', 'POST'])
+@csrf_protect
 def setup():
     """Первый запуск: пользователей ещё нет — создаём администратора."""
     if User.query.count():
@@ -105,6 +107,7 @@ def setup():
         from app.storage import users_dir
         os.makedirs(users_dir(), exist_ok=True)
         login_user(user, remember=True)
+        rotate_token()  # после входа — новый токен, чтобы страницы до входа не подходили
         flash('Диск готов! Добавьте пользователей в разделе «Пользователи».', 'success')
         return redirect(url_for('files.list_files'))
     from app.admin import default_storage
@@ -115,6 +118,7 @@ def _storage_ctx():
     return {'storage_from_env': current_app.config.get('STORAGE_DIR')}
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@csrf_protect
 def login():
     if not User.query.count():
         return redirect(url_for('auth.setup'))
@@ -136,6 +140,7 @@ def login():
         user.last_login = datetime.utcnow()
         db.session.commit()
         login_user(user, remember=True)
+        rotate_token()  # после входа — новый токен, чтобы страницы до входа не подходили
         nxt = request.args.get('next', '')
         if nxt.startswith('/') and not nxt.startswith('//'):
             return redirect(nxt)
@@ -146,4 +151,5 @@ def login():
 @login_required
 def logout():
     logout_user()
+    rotate_token()  # после выхода старый токен больше не действует
     return redirect(url_for('auth.login'))

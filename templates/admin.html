@@ -68,6 +68,7 @@
             Можно дать полный доступ ко всему хранилищу или ограничить личной папкой
             с лимитом в ГБ. Администратор всегда видит всё.</p>
         <form method="POST" action="{{ url_for('admin.add_user') }}">
+            {{ csrf_field() }}
             <div class="adm-form">
                 <div>
                     <label>Имя (видно только в списке)</label>
@@ -124,11 +125,13 @@
                 <button class="u-btn pw" onclick="openPw({{ u.id }}, {{ u.username|tojson|forceescape }})"><i class="bi bi-key-fill"></i> Пароль</button>
                 <button class="u-btn ren" onclick="openRen({{ u.id }}, {{ u.username|tojson|forceescape }})"><i class="bi bi-pencil-fill"></i> Имя</button>
                 <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=u.id) }}" style="display:inline">
+                    {{ csrf_field() }}
                     <button class="u-btn adm"><i class="bi bi-star{{ '' if u.is_admin else '-fill' }}"></i> {{ 'Снять админа' if u.is_admin else 'Сделать админом' }}</button>
                 </form>
                 {% if not is_me %}
                 <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" style="display:inline"
                       onsubmit="return confirm('Удалить пользователя «' + {{ u.username|tojson|forceescape }} + '»? Его папка уйдёт в вашу корзину, оттуда её можно вернуть.')">
+                    {{ csrf_field() }}
                     <button class="u-btn del"><i class="bi bi-trash3-fill"></i> Удалить</button>
                 </form>
                 {% endif %}
@@ -143,6 +146,7 @@
 <div class="modal fade adm-modal" id="pwModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
     <form method="POST" id="pwForm">
+      {{ csrf_field() }}
       <div class="modal-content">
         <div class="modal-header" style="padding:16px 20px;">
           <h5 class="modal-title" style="font-size:16px;font-weight:700;"><i class="bi bi-key-fill me-1" style="color:#E0A800"></i> Новый пароль: <span id="pwName"></span></h5>
@@ -165,6 +169,7 @@
 <div class="modal fade adm-modal" id="accessModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
     <form method="POST" id="accessForm">
+      {{ csrf_field() }}
       <div class="modal-content">
         <div class="modal-header" style="padding:16px 20px;">
           <h5 class="modal-title" style="font-size:16px;font-weight:700;"><i class="bi bi-hdd-fill me-1" style="color:#E0A800"></i> Доступ: <span id="accessName"></span></h5>
@@ -192,6 +197,7 @@
 <div class="modal fade adm-modal" id="renModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
     <form method="POST" id="renForm">
+      {{ csrf_field() }}
       <div class="modal-content">
         <div class="modal-header" style="padding:16px 20px;">
           <h5 class="modal-title" style="font-size:16px;font-weight:700;"><i class="bi bi-pencil-fill me-1" style="color:#E0A800"></i> Изменить имя</h5>

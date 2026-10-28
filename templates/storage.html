@@ -29,6 +29,7 @@
     <p><i class="bi bi-info-circle-fill" style="color:#E0A800"></i> Путь задан в файле <code>.env</code> (STORAGE_DIR). Чтобы изменить его, поправьте этот файл и перезапустите диск.</p>
     {% else %}
     <form method="POST">
+        {{ csrf_field() }}
         <input class="st-input" name="storage_root" value="{{ suggested }}" placeholder="D:\" required>
         <p style="margin-top:8px;font-size:12.5px;">Примеры: <code>D:\</code> — весь диск D, <code>D:\Общее</code> — одна папка. Если папки нет, она будет создана.</p>
         <button type="submit" class="yd-btn-upload" style="width:auto;padding:10px 22px;"><i class="bi bi-check-lg"></i> Сохранить</button>

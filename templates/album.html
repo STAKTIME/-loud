@@ -55,6 +55,7 @@
     <div class="alb-actions">
         <button class="yd-btn-upload" onclick="openPicker()"><i class="bi bi-plus-lg"></i> Добавить с диска</button>
         <form method="POST" action="{{ url_for('files.album_upload', album_id=album.id) }}" enctype="multipart/form-data" id="albumUploadForm" style="margin:0">
+            {{ csrf_field() }}
             <input type="file" name="photos" accept="image/*" multiple hidden onchange="this.form.submit()">
             <button type="button" class="yd-btn-create" onclick="this.form.photos.click()" title="Сохраняются в папку {{ upload_folder }}"><i class="bi bi-cloud-arrow-up"></i> Загрузить новые</button>
         </form>
@@ -96,12 +97,13 @@
     </div>
 </div>
 
-<form method="POST" action="{{ url_for('files.album_remove', album_id=album.id) }}" id="removeForm" style="display:none"><input name="item_id"></form>
+<form method="POST" action="{{ url_for('files.album_remove', album_id=album.id) }}" id="removeForm" style="display:none">{{ csrf_field() }}<input name="item_id"></form>
 
 <!-- Выбор фото с диска -->
 <div class="modal fade" id="pickerModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <form method="POST" action="{{ url_for('files.album_add', album_id=album.id) }}" class="modal-content" id="pickerForm">
+      {{ csrf_field() }}
       <div class="modal-header"><h5 class="modal-title"><i class="bi bi-images me-2" style="color:#E0A800"></i>Выберите фото</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <div class="pk-crumbs" id="pkCrumbs"></div>
@@ -118,6 +120,7 @@
 
 <!-- Поделиться -->
 <div class="modal fade" id="albumShareModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.share_album', album_id=album.id) }}" class="modal-content">
+  {{ csrf_field() }}
   <div class="modal-header"><h5 class="modal-title">Поделиться альбомом</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body"><label class="form-label">Срок ссылки</label><select class="form-select" name="expires_days"><option value="1">1 день</option><option value="7" selected>7 дней</option><option value="30">30 дней</option><option value="0">Бессрочно</option></select>
     <label class="d-flex gap-2 mt-3"><input type="checkbox" name="allow_download" value="1" checked> Разрешить скачивать фотографии</label></div>
@@ -126,6 +129,7 @@
 
 <!-- Переименовать -->
 <div class="modal fade" id="albumRenameModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.rename_album', album_id=album.id) }}" class="modal-content">
+  {{ csrf_field() }}
   <div class="modal-header"><h5 class="modal-title">Переименовать альбом</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body"><input class="form-control" name="name" value="{{ album.name }}" required maxlength="256"></div>
   <div class="modal-footer" style="gap:8px"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px">Сохранить</button></div>
@@ -133,6 +137,7 @@
 
 <!-- Удалить -->
 <div class="modal fade" id="albumDeleteModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered" style="max-width:420px"><form method="POST" action="{{ url_for('files.delete_album', album_id=album.id) }}" class="modal-content">
+  {{ csrf_field() }}
   <div class="modal-header"><h5 class="modal-title">Удалить альбом?</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body"><p class="mb-0">Альбом «{{ album.name }}» и его публичные ссылки будут удалены. <b>Сами фотографии останутся на диске.</b></p></div>
   <div class="modal-footer" style="gap:8px"><button type="button" class="yd-btn-create" style="width:auto;padding:8px 16px" data-bs-dismiss="modal">Отмена</button><button class="yd-btn-upload" style="width:auto;padding:8px 16px"><i class="bi bi-trash3"></i> Удалить</button></div>

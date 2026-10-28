@@ -35,6 +35,10 @@
     </style>
 </head>
 <body>
+    <script>
+    // Токен защиты форм (CSRF) — нужен страницам входа и первого запуска
+    window.CSRF_TOKEN = {{ csrf_token()|tojson }};
+    </script>
     <div class="card">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}

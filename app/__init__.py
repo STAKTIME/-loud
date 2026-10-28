@@ -3,6 +3,7 @@ from flask import Flask, redirect, url_for, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_required
 from config import Config
+from app.csrf import init_csrf
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -16,6 +17,7 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
+    init_csrf(app)
 
     from app.models import User
 
@@ -27,11 +29,13 @@ def create_app():
     from app.files import files_bp
     from app.public import public_bp
     from app.admin import admin_bp
+    from app.chunked import chunked_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(files_bp, url_prefix='/files')
     app.register_blueprint(public_bp, url_prefix='/public')
     app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.register_blueprint(chunked_bp, url_prefix='/files')
 
     @app.route('/')
     def index():
@@ -51,6 +55,11 @@ def create_app():
         if request.path.startswith('/public/'):
             return public_error(e)
         return render_template('error.html', code=403, text='Этот раздел только для администратора'), 403
+
+    @app.errorhandler(400)
+    def bad_request(e):
+        text = getattr(e, 'description', None) or 'Некорректный запрос'
+        return render_template('error.html', code=400, text=text), 400
 
     @app.errorhandler(404)
     def not_found(e):
